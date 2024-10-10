@@ -1,5 +1,17 @@
 # frozen_string_literal: true
 
+host_os = RbConfig::CONFIG['host_os']
+case host_os
+when /linux/
+  ENV['SECP256K1_LIB_PATH'] = ENV['TEST_LIBSECP256K1_PATH'] || File.expand_path('lib/libsecp256k1.so', File.dirname(__FILE__))
+else
+  if ENV['LIBSECP_PATH']
+    ENV['SECP256K1_LIB_PATH'] = ENV['TEST_LIBSECP256K1_PATH']
+  else
+    raise "To run this test, environment variable \"TEST_LIBSECP256K1_PATH\" must specify the path to a valid libsecp256k1 library."
+  end
+end
+
 require "secp256k1"
 
 RSpec.configure do |config|
