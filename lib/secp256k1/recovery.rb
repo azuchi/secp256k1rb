@@ -47,7 +47,7 @@ module Secp256k1
       raise ArgumentError, "data must be 32 bytes." unless data.bytesize == 32
 
       with_context do |context|
-        rec = (signature[0].ord - 27) & 3
+        rec = (signature.unpack1('C') - 27) & 3
         sig = FFI::MemoryPointer.new(:uchar, 65)
         input = FFI::MemoryPointer.new(:uchar, 64).put_bytes(0, signature[1..-1])
         result = secp256k1_ecdsa_recoverable_signature_parse_compact(context, sig, input, rec)
