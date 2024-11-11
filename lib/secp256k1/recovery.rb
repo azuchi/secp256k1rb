@@ -3,7 +3,7 @@ module Secp256k1
     # Sign data with compact format.
     # @param [String] data The 32-byte message hash being signed.
     # @param [String] private_key a private key using sign with hex format
-    # @return [Array] Array of ECDSA::Signature and recovery id.
+    # @return [Array] Array of signature and recovery id.
     # @raise [Secp256k1::Error] If recovery failed.
     # @raise [ArgumentError] If invalid arguments specified.
     def sign_recoverable(data, private_key)

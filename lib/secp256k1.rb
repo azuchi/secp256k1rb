@@ -110,30 +110,6 @@ module Secp256k1
     end
   end
 
-  # Verify signature.
-  # @param [String] data The 32-byte message hash assumed to be signed.
-  # @param [String] signature signature data with binary format
-  # @param [String] pubkey a public key with hex format using verify.
-  # @param [Symbol] algo signature algorithm. ecdsa(default) or schnorr.
-  # @return [Boolean] verification result.
-  # @raise [ArgumentError] If invalid arguments specified.
-  def verify_sig(data, signature, pubkey, algo: :ecdsa)
-    raise ArgumentError, "sig must be String." unless signature.is_a?(String)
-    raise ArgumentError, "pubkey must be String." unless pubkey.is_a?(String)
-    raise ArgumentError, "data must be String." unless data.is_a?(String)
-    data = hex2bin(data)
-    raise ArgumentError, "data must be 32 bytes." unless data.bytesize == 32
-    pubkey = hex2bin(pubkey)
-    signature = hex2bin(signature)
-    case algo
-    when :ecdsa
-      verify_ecdsa(data, signature, pubkey)
-    when :schnorr
-      verify_schnorr(data, signature, pubkey)
-    else
-      raise ArgumentError, "unknown algo: #{algo}"
-    end
-  end
 
   # Validate whether this is a valid public key.
   # @param [String] pubkey public key with hex format.
@@ -184,29 +160,6 @@ module Secp256k1
     true
   end
 
-  private
-
-  # Calculate full public key(64 bytes) from public key(32 bytes).
-  # @param [String] pubkey x-only public key with hex format(32 bytes).
-  # @return [String] x-only public key with hex format(64 bytes).
-  # @raise ArgumentError
-  def full_pubkey_from_xonly_pubkey(pubkey)
-    with_context do |context|
-      raise ArgumentError, "Pubkey size must be #{X_ONLY_PUBKEY_SIZE} bytes." unless pubkey.bytesize == X_ONLY_PUBKEY_SIZE
-      xonly_pubkey = FFI::MemoryPointer.new(:uchar, pubkey.bytesize).put_bytes(0, pubkey)
-      full_pubkey = FFI::MemoryPointer.new(:uchar, 64)
-      raise ArgumentError, 'An invalid public key was specified.' unless secp256k1_xonly_pubkey_parse(context, full_pubkey, xonly_pubkey) == 1
-      full_pubkey.read_string(64).unpack1('H*')
-    end
-  end
-
-  def generate_pubkey_in_context(context, private_key, compressed: true)
-    internal_pubkey = FFI::MemoryPointer.new(:uchar, 64)
-    result = secp256k1_ec_pubkey_create(context, internal_pubkey, private_key)
-    raise 'error creating pubkey' unless result
-    serialize_pubkey_internal(context, internal_pubkey, compressed)
-  end
-
   def sign_ecdsa(data, private_key, extra_entropy)
     with_context do |context|
       secret = FFI::MemoryPointer.new(:uchar, private_key.bytesize).put_bytes(0, private_key)
@@ -245,7 +198,20 @@ module Secp256k1
     end
   end
 
-  def verify_ecdsa(data, sig, pubkey)
+  # Verify ecdsa signature.
+  # @param [String] data The 32-byte message hash assumed to be signed.
+  # @param [String] signature signature data with binary format
+  # @param [String] pubkey a public key with hex format using verify.
+  # @return [Boolean] verification result.
+  # @raise [ArgumentError] If invalid arguments specified.
+  def verify_ecdsa(data, signature, pubkey)
+    raise ArgumentError, "sig must be String." unless signature.is_a?(String)
+    raise ArgumentError, "pubkey must be String." unless pubkey.is_a?(String)
+    raise ArgumentError, "data must be String." unless data.is_a?(String)
+    data = hex2bin(data)
+    raise ArgumentError, "data must be 32 bytes." unless data.bytesize == 32
+    pubkey = hex2bin(pubkey)
+    signature = hex2bin(signature)
     with_context do |context|
       return false if data.bytesize == 0
       pubkey = FFI::MemoryPointer.new(:uchar, pubkey.bytesize).put_bytes(0, pubkey)
@@ -253,7 +219,7 @@ module Secp256k1
       result = secp256k1_ec_pubkey_parse(context, internal_pubkey, pubkey, pubkey.size)
       return false unless result
 
-      signature = FFI::MemoryPointer.new(:uchar, sig.bytesize).put_bytes(0, sig)
+      signature = FFI::MemoryPointer.new(:uchar, signature.bytesize).put_bytes(0, signature)
       internal_signature = FFI::MemoryPointer.new(:uchar, 64)
       result = secp256k1_ecdsa_signature_parse_der(context, internal_signature, signature, signature.size)
       return false unless result
@@ -268,16 +234,52 @@ module Secp256k1
     end
   end
 
-  def verify_schnorr(data, sig, pubkey)
+  # Verify ecdsa signature.
+  # @param [String] data The 32-byte message hash assumed to be signed.
+  # @param [String] signature signature data with binary format
+  # @param [String] pubkey a public key with hex format using verify.
+  # @return [Boolean] verification result.
+  # @raise [ArgumentError] If invalid arguments specified.
+  def verify_schnorr(data, signature, pubkey)
+    raise ArgumentError, "sig must be String." unless signature.is_a?(String)
+    raise ArgumentError, "pubkey must be String." unless pubkey.is_a?(String)
+    raise ArgumentError, "data must be String." unless data.is_a?(String)
+    data = hex2bin(data)
+    raise ArgumentError, "data must be 32 bytes." unless data.bytesize == 32
+    pubkey = hex2bin(pubkey)
+    signature = hex2bin(signature)
     with_context do |context|
       return false if data.bytesize == 0
       pubkey = [full_pubkey_from_xonly_pubkey(pubkey)].pack('H*')
       xonly_pubkey = FFI::MemoryPointer.new(:uchar, pubkey.bytesize).put_bytes(0, pubkey)
-      signature = FFI::MemoryPointer.new(:uchar, sig.bytesize).put_bytes(0, sig)
+      signature = FFI::MemoryPointer.new(:uchar, signature.bytesize).put_bytes(0, signature)
       msg32 = FFI::MemoryPointer.new(:uchar, 32).put_bytes(0, data)
       result = secp256k1_schnorrsig_verify(context, signature, msg32, 32, xonly_pubkey)
       result == 1
     end
+  end
+
+  private
+
+  # Calculate full public key(64 bytes) from public key(32 bytes).
+  # @param [String] pubkey x-only public key with hex format(32 bytes).
+  # @return [String] x-only public key with hex format(64 bytes).
+  # @raise ArgumentError
+  def full_pubkey_from_xonly_pubkey(pubkey)
+    with_context do |context|
+      raise ArgumentError, "Pubkey size must be #{X_ONLY_PUBKEY_SIZE} bytes." unless pubkey.bytesize == X_ONLY_PUBKEY_SIZE
+      xonly_pubkey = FFI::MemoryPointer.new(:uchar, pubkey.bytesize).put_bytes(0, pubkey)
+      full_pubkey = FFI::MemoryPointer.new(:uchar, 64)
+      raise ArgumentError, 'An invalid public key was specified.' unless secp256k1_xonly_pubkey_parse(context, full_pubkey, xonly_pubkey) == 1
+      full_pubkey.read_string(64).unpack1('H*')
+    end
+  end
+
+  def generate_pubkey_in_context(context, private_key, compressed: true)
+    internal_pubkey = FFI::MemoryPointer.new(:uchar, 64)
+    result = secp256k1_ec_pubkey_create(context, internal_pubkey, private_key)
+    raise 'error creating pubkey' unless result
+    serialize_pubkey_internal(context, internal_pubkey, compressed)
   end
 
   # Serialize public key.
