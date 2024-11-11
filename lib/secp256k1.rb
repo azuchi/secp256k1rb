@@ -5,6 +5,7 @@ require_relative "secp256k1/version"
 require_relative 'secp256k1/c'
 require_relative 'secp256k1/recovery'
 require_relative 'secp256k1/ellswift'
+require_relative 'secp256k1/schnorrsig'
 
 # Binding for secp256k1 (https://github.com/bitcoin-core/secp256k1/)
 module Secp256k1
@@ -13,6 +14,7 @@ module Secp256k1
 
   include C
   include Recover
+  include SchnorrSig
   include ELLSwift
 
   FLAGS_TYPE_MASK = ((1 << 8) - 1)
@@ -93,13 +95,7 @@ module Secp256k1
   # @return [String] signature data with binary format. If unsupported algorithm specified, return nil.
   # @raise [ArgumentError] If invalid arguments specified.
   def sign_data(data, private_key, extra_entropy = nil, algo: :ecdsa)
-    raise ArgumentError, "private_key must be String." unless private_key.is_a?(String)
-    raise ArgumentError, "data must by String." unless data.is_a?(String)
-    raise ArgumentError, "extra_entropy must be String." if !extra_entropy.nil? && !extra_entropy.is_a?(String)
-    private_key = hex2bin(private_key)
-    raise ArgumentError, "private_key must be 32 bytes." unless private_key.bytesize == 32
-    data = hex2bin(data)
-    raise ArgumentError, "data must be 32 bytes." unless data.bytesize == 32
+
     case algo
     when :ecdsa
       sign_ecdsa(data, private_key, extra_entropy)
@@ -160,7 +156,21 @@ module Secp256k1
     true
   end
 
+  # Sign to data using ecdsa.
+  # @param [String] data The 32-byte message hash being signed with binary format.
+  # @param [String] private_key a private key with hex format using sign.
+  # @param [String] extra_entropy a extra entropy with binary format for rfc6979.
+  # @return [String] signature data with binary format. If unsupported algorithm specified, return nil.
+  # @raise [ArgumentError] If invalid arguments specified.
   def sign_ecdsa(data, private_key, extra_entropy)
+    raise ArgumentError, "private_key must be String." unless private_key.is_a?(String)
+    raise ArgumentError, "data must by String." unless data.is_a?(String)
+    raise ArgumentError, "extra_entropy must be String." if !extra_entropy.nil? && !extra_entropy.is_a?(String)
+    private_key = hex2bin(private_key)
+    raise ArgumentError, "private_key must be 32 bytes." unless private_key.bytesize == 32
+    data = hex2bin(data)
+    raise ArgumentError, "data must be 32 bytes." unless data.bytesize == 32
+
     with_context do |context|
       secret = FFI::MemoryPointer.new(:uchar, private_key.bytesize).put_bytes(0, private_key)
       raise Error, 'private_key is invalid' unless secp256k1_ec_seckey_verify(context, secret)
@@ -183,18 +193,6 @@ module Secp256k1
       raise Error, 'secp256k1_ecdsa_signature_serialize_der failed' unless result
 
       signature.read_string(signature_len.read_uint64)
-    end
-  end
-
-  def sign_schnorr(data, private_key, aux_rand = nil)
-    with_context do |context|
-      keypair = [create_keypair(private_key)].pack('H*')
-      keypair = FFI::MemoryPointer.new(:uchar, 96).put_bytes(0, keypair)
-      signature = FFI::MemoryPointer.new(:uchar, 64)
-      msg32 = FFI::MemoryPointer.new(:uchar, 32).put_bytes(0, data)
-      aux_rand = FFI::MemoryPointer.new(:uchar, 32).put_bytes(0, aux_rand) if aux_rand
-      raise Error, 'Failed to generate schnorr signature.' unless secp256k1_schnorrsig_sign32(context, signature, msg32, keypair, aux_rand) == 1
-      signature.read_string(64)
     end
   end
 
@@ -230,31 +228,6 @@ module Secp256k1
       msg32 = FFI::MemoryPointer.new(:uchar, 32).put_bytes(0, data)
       result = secp256k1_ecdsa_verify(context, internal_signature, msg32, internal_pubkey)
 
-      result == 1
-    end
-  end
-
-  # Verify ecdsa signature.
-  # @param [String] data The 32-byte message hash assumed to be signed.
-  # @param [String] signature signature data with binary format
-  # @param [String] pubkey a public key with hex format using verify.
-  # @return [Boolean] verification result.
-  # @raise [ArgumentError] If invalid arguments specified.
-  def verify_schnorr(data, signature, pubkey)
-    raise ArgumentError, "sig must be String." unless signature.is_a?(String)
-    raise ArgumentError, "pubkey must be String." unless pubkey.is_a?(String)
-    raise ArgumentError, "data must be String." unless data.is_a?(String)
-    data = hex2bin(data)
-    raise ArgumentError, "data must be 32 bytes." unless data.bytesize == 32
-    pubkey = hex2bin(pubkey)
-    signature = hex2bin(signature)
-    with_context do |context|
-      return false if data.bytesize == 0
-      pubkey = [full_pubkey_from_xonly_pubkey(pubkey)].pack('H*')
-      xonly_pubkey = FFI::MemoryPointer.new(:uchar, pubkey.bytesize).put_bytes(0, pubkey)
-      signature = FFI::MemoryPointer.new(:uchar, signature.bytesize).put_bytes(0, signature)
-      msg32 = FFI::MemoryPointer.new(:uchar, 32).put_bytes(0, data)
-      result = secp256k1_schnorrsig_verify(context, signature, msg32, 32, xonly_pubkey)
       result == 1
     end
   end
