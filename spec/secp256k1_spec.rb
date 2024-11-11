@@ -53,7 +53,7 @@ RSpec.describe Secp256k1 do
         pub_key = '0292ee82d9add0512294723f2c363aee24efdeb3f258cdaf5118a4fcf5263e92c9'
         sig = target.sign_data(message, priv_key, nil)
         expect(target.verify_sig(message, sig, pub_key)).to be true
-        expect(target.verify_sig('hoge', sig, pub_key)).to be false
+        expect{target.verify_sig('hoge', sig, pub_key)}.to raise_error(ArgumentError, 'data must be 32 bytes.')
       end
     end
 
@@ -64,7 +64,7 @@ RSpec.describe Secp256k1 do
         pub_key = target.generate_pubkey(priv_key)
         sig = target.sign_data(message, priv_key, algo: :schnorr)
         expect(target.verify_sig(message, sig, pub_key[2..-1], algo: :schnorr)).to be true
-        expect(target.verify_sig('hoge', sig, pub_key[2..-1], algo: :schnorr)).to be false
+        expect{target.verify_sig('hoge', sig, pub_key[2..-1], algo: :schnorr)}.to raise_error(ArgumentError, 'data must be 32 bytes.')
 
         # specify aux_rand
         message = ['7E2D58D8B3BCDF1ABADEC7829054F90DDA9805AAB56C77333024B9D0A508B75C'].pack('H*')

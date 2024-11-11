@@ -3,6 +3,8 @@
 require 'securerandom'
 require_relative "secp256k1/version"
 require_relative 'secp256k1/c'
+require_relative 'secp256k1/recovery'
+require_relative 'secp256k1/ellswift'
 
 # Binding for secp256k1 (https://github.com/bitcoin-core/secp256k1/)
 module Secp256k1
@@ -10,6 +12,8 @@ module Secp256k1
   class Error < StandardError; end
 
   include C
+  include Recover
+  include ELLSwift
 
   FLAGS_TYPE_MASK = ((1 << 8) - 1)
   FLAGS_TYPE_CONTEXT = (1 << 0)
@@ -28,6 +32,7 @@ module Secp256k1
   EC_UNCOMPRESSED = (FLAGS_TYPE_COMPRESSION)
 
   X_ONLY_PUBKEY_SIZE = 32
+  ELL_SWIFT_KEY_SIZE = 64
 
   # Creates a secp256k1 context object, performs the operations passed in the block,
   # and then ensures that the secp256k1 context object is destroyed at the end.
@@ -58,209 +63,135 @@ module Secp256k1
       while ret != 1
         raise Error, 'secp256k1_ec_seckey_verify in generate_key_pair failed.' if tries >= max
         tries += 1
-        priv_key = FFI::MemoryPointer.new(:uchar, 32).put_bytes(0, SecureRandom.random_bytes(32))
-        ret = secp256k1_ec_seckey_verify(context, priv_key)
+        private_key = FFI::MemoryPointer.new(:uchar, 32).put_bytes(0, SecureRandom.random_bytes(32))
+        ret = secp256k1_ec_seckey_verify(context, private_key)
       end
-      private_key =  priv_key.read_string(32).unpack1('H*')
+      private_key =  private_key.read_string(32).unpack1('H*')
       [private_key , generate_pubkey_in_context(context,  private_key, compressed: compressed) ]
     end
   end
 
-  # Generate public key from +priv_key+.
-  # @param [String] priv_key
+  # Generate public key from +private_key+.
+  # @param [String] private_key Private key with hex format.
   # @param [Boolean] compressed Whether to generate a compressed public key.
   # @return [String] Public key with hex format.
-  def generate_pubkey(priv_key, compressed: true)
+  # @raise [ArgumentError] If invalid arguments specified.
+  def generate_pubkey(private_key, compressed: true)
+    raise  ArgumentError, "private_key must be String." unless private_key.is_a?(String)
+    private_key = hex2bin(private_key)
+    raise ArgumentError, "private_key must by 32 bytes." unless private_key.bytesize == 32
     with_context do |context|
-      generate_pubkey_in_context(context, priv_key, compressed: compressed)
+      generate_pubkey_in_context(context, private_key, compressed: compressed)
     end
   end
 
   # Sign to data.
-  # @param [String] data a data to be signed with binary format.
-  # @param [String] privkey a private key with hex format using sign.
+  # @param [String] data The 32-byte message hash being signed with binary format.
+  # @param [String] private_key a private key with hex format using sign.
   # @param [String] extra_entropy a extra entropy with binary format for rfc6979.
   # @param [Symbol] algo signature algorithm. ecdsa(default) or schnorr.
   # @return [String] signature data with binary format. If unsupported algorithm specified, return nil.
-  def sign_data(data, privkey, extra_entropy = nil, algo: :ecdsa)
+  # @raise [ArgumentError] If invalid arguments specified.
+  def sign_data(data, private_key, extra_entropy = nil, algo: :ecdsa)
+    raise ArgumentError, "private_key must be String." unless private_key.is_a?(String)
+    raise ArgumentError, "data must by String." unless data.is_a?(String)
+    raise ArgumentError, "extra_entropy must be String." if !extra_entropy.nil? && !extra_entropy.is_a?(String)
+    private_key = hex2bin(private_key)
+    raise ArgumentError, "private_key must be 32 bytes." unless private_key.bytesize == 32
+    data = hex2bin(data)
+    raise ArgumentError, "data must be 32 bytes." unless data.bytesize == 32
     case algo
     when :ecdsa
-      sign_ecdsa(data, privkey, extra_entropy)
+      sign_ecdsa(data, private_key, extra_entropy)
     when :schnorr
-      sign_schnorr(data, privkey, extra_entropy)
+      sign_schnorr(data, private_key, extra_entropy)
     else
-      nil
-    end
-  end
-
-  # Sign data with compact format.
-  # @param [String] data a data to be signed with binary format
-  # @param [String] privkey a private key using sign with hex format
-  # @return [Array] Array of ECDSA::Signature and recovery id.
-  # @raise [Secp256k1::Error] If recovery failed.
-  def sign_recoverable(data, privkey)
-    with_context do |context|
-      sig = FFI::MemoryPointer.new(:uchar, 65)
-      hash =FFI::MemoryPointer.new(:uchar, data.bytesize).put_bytes(0, data)
-      priv_key = [privkey].pack('H*')
-      sec_key = FFI::MemoryPointer.new(:uchar, priv_key.bytesize).put_bytes(0, priv_key)
-      result = secp256k1_ecdsa_sign_recoverable(context, sig, hash, sec_key, nil, nil)
-      raise Error, 'secp256k1_ecdsa_sign_recoverable failed.' if result == 0
-
-      output = FFI::MemoryPointer.new(:uchar, 64)
-      rec = FFI::MemoryPointer.new(:uint64)
-      result = secp256k1_ecdsa_recoverable_signature_serialize_compact(context, output, rec, sig)
-      raise Error, 'secp256k1_ecdsa_recoverable_signature_serialize_compact failed.' unless result == 1
-
-      sig = output.read_string(64).unpack1('H*')
-      [sig, rec.read(:int)]
-    end
-  end
-
-  # Recover public key from compact signature.
-  # @param [String] data message digest using signature.
-  # @param [String] signature signature with binary format.
-  # @param [Integer] rec recovery id.
-  # @param [Boolean] compressed whether compressed public key or not.
-  # @return [String] Recovered public key with hex format.
-  # @raise [Secp256k1::Error] If recover failed.
-  def recover(data, signature, rec, compressed)
-    with_context do |context|
-      sig = FFI::MemoryPointer.new(:uchar, 65)
-      input = FFI::MemoryPointer.new(:uchar, 64).put_bytes(0, signature[1..-1])
-      result = secp256k1_ecdsa_recoverable_signature_parse_compact(context, sig, input, rec)
-      raise Error, 'secp256k1_ecdsa_recoverable_signature_parse_compact failed.' unless result == 1
-
-      pubkey = FFI::MemoryPointer.new(:uchar, 64)
-      msg = FFI::MemoryPointer.new(:uchar, data.bytesize).put_bytes(0, data)
-      result = secp256k1_ecdsa_recover(context, pubkey, sig, msg)
-      raise Error, 'secp256k1_ecdsa_recover failed.' unless result == 1
-
-      serialize_pubkey_internal(context, pubkey.read_string(64), compressed)
+      raise ArgumentError, "unknown algo: #{algo}"
     end
   end
 
   # Verify signature.
-  # @param [String] data a data with binary format.
-  # @param [String] sig signature data with binary format
+  # @param [String] data The 32-byte message hash assumed to be signed.
+  # @param [String] signature signature data with binary format
   # @param [String] pubkey a public key with hex format using verify.
   # @param [Symbol] algo signature algorithm. ecdsa(default) or schnorr.
   # @return [Boolean] verification result.
-  def verify_sig(data, sig, pubkey, algo: :ecdsa)
+  # @raise [ArgumentError] If invalid arguments specified.
+  def verify_sig(data, signature, pubkey, algo: :ecdsa)
+    raise ArgumentError, "sig must be String." unless signature.is_a?(String)
+    raise ArgumentError, "pubkey must be String." unless pubkey.is_a?(String)
+    raise ArgumentError, "data must be String." unless data.is_a?(String)
+    data = hex2bin(data)
+    raise ArgumentError, "data must be 32 bytes." unless data.bytesize == 32
+    pubkey = hex2bin(pubkey)
+    signature = hex2bin(signature)
     case algo
     when :ecdsa
-      verify_ecdsa(data, sig, pubkey)
+      verify_ecdsa(data, signature, pubkey)
     when :schnorr
-      verify_schnorr(data, sig, pubkey)
+      verify_schnorr(data, signature, pubkey)
     else
-      false
+      raise ArgumentError, "unknown algo: #{algo}"
     end
   end
 
   # Validate whether this is a valid public key.
-  # @param [String] pub_key public key with hex format.
+  # @param [String] pubkey public key with hex format.
   # @param [Boolean] allow_hybrid whether support hybrid public key.
   # @return [Boolean] If valid public key return true, otherwise false.
-  def parse_ec_pubkey?(pub_key, allow_hybrid = false)
-    pub_key = [pub_key].pack("H*")
-    return false if !allow_hybrid && ![0x02, 0x03, 0x04].include?(pub_key[0].ord)
+  # @raise [ArgumentError] If invalid arguments specified.
+  def parse_ec_pubkey?(pubkey, allow_hybrid = false)
+    raise ArgumentError, "pubkey must be String." unless pubkey.is_a?(String)
+    pubkey = hex2bin(pubkey)
+    return false if !allow_hybrid && ![0x02, 0x03, 0x04].include?(pubkey[0].ord)
     with_context do |context|
-      pubkey = FFI::MemoryPointer.new(:uchar, pub_key.bytesize).put_bytes(0, pub_key)
+      pubkey_size = pubkey.bytesize
+      pubkey = FFI::MemoryPointer.new(:uchar, pubkey_size).put_bytes(0, pubkey)
       internal_pubkey = FFI::MemoryPointer.new(:uchar, 64)
-      result = secp256k1_ec_pubkey_parse(context, internal_pubkey, pubkey, pub_key.bytesize)
+      result = secp256k1_ec_pubkey_parse(context, internal_pubkey, pubkey, pubkey_size)
       result == 1
     end
   end
 
   # Create key pair data from private key.
-  # @param [String] priv_key with hex format
+  # @param [String] private_key with hex format
   # @return [String] key pair data with hex format. data = private key(32 bytes) | public key(64 bytes).
-  # @raise [Secp256k1::Error] If priv_key is invalid.
-  def create_keypair(priv_key)
+  # @raise [Secp256k1::Error] If private_key is invalid.
+  # @raise [ArgumentError] If invalid arguments specified.
+  def create_keypair(private_key)
+    raise ArgumentError, "private_key must be String." unless private_key.is_a?(String)
+    private_key = hex2bin(private_key)
+    raise ArgumentError, "private_key must be 32 bytes." unless private_key.bytesize == 32
     with_context do |context|
-      priv_key = [priv_key].pack('H*')
-      secret = FFI::MemoryPointer.new(:uchar, priv_key.bytesize).put_bytes(0, priv_key)
-      raise Error, 'priv_key is invalid.' unless secp256k1_ec_seckey_verify(context, secret)
+      secret = FFI::MemoryPointer.new(:uchar, private_key.bytesize).put_bytes(0, private_key)
+      raise Error, 'private_key is invalid.' unless secp256k1_ec_seckey_verify(context, secret)
       keypair = FFI::MemoryPointer.new(:uchar, 96)
-      raise Error 'priv_key is invalid.' unless secp256k1_keypair_create(context, keypair, secret) == 1
+      raise Error 'private_key is invalid.' unless secp256k1_keypair_create(context, keypair, secret) == 1
       keypair.read_string(96).unpack1('H*')
     end
   end
 
   # Check whether valid x-only public key or not.
-  # @param [String] pub_key x-only public key with hex format(32 bytes).
+  # @param [String] pubkey x-only public key with hex format(32 bytes).
   # @return [Boolean] result.
-  def valid_xonly_pubkey?(pub_key)
+  def valid_xonly_pubkey?(pubkey)
+    return false unless pubkey.is_a?(String)
     begin
-      full_pubkey_from_xonly_pubkey(pub_key)
+      full_pubkey_from_xonly_pubkey(hex2bin(pubkey))
     rescue Exception
       return false
     end
     true
   end
 
-  # Decode ellswift public key.
-  # @param [String] ell_key ElligatorSwift key with binary format.
-  # @return [String] Decoded public key with hex format.
-  # @raise [Secp256k1::Error] If decode failed.
-  def ellswift_decode(ell_key)
-    with_context do |context|
-      ell64 = FFI::MemoryPointer.new(:uchar, ell_key.bytesize).put_bytes(0, ell_key)
-      internal = FFI::MemoryPointer.new(:uchar, 64)
-      result = secp256k1_ellswift_decode(context, internal, ell64)
-      raise Error, 'Decode failed.' unless result == 1
-      serialize_pubkey_internal(context, internal, true)
-    end
-  end
-
-  # Compute an ElligatorSwift public key for a secret key.
-  # @param [String] priv_key private key with hex format
-  # @return [String] ElligatorSwift public key with hex format.
-  # @raise [Secp256k1::Error] If failed to create elligattor swhift public key.
-  def ellswift_create(priv_key)
-    with_context(flags: SECP256K1_CONTEXT_SIGN) do |context|
-      ell64 = FFI::MemoryPointer.new(:uchar, 64)
-      seckey32 = FFI::MemoryPointer.new(:uchar, 32).put_bytes(0, [priv_key].pack('H*'))
-      result = secp256k1_ellswift_create(context, ell64, seckey32, nil)
-      raise Error, 'Failed to create ElligatorSwift public key.' unless result == 1
-      ell64.read_string(64).unpack1('H*')
-    end
-  end
-
-  # Compute X coordinate of shared ECDH point between elswift pubkey and privkey.
-  # @param [Bitcoin::BIP324::EllSwiftPubkey] their_ell_pubkey Their EllSwift public key.
-  # @param [Bitcoin::BIP324::EllSwiftPubkey] our_ell_pubkey Our EllSwift public key.
-  # @param [String] priv_key private key with hex format.
-  # @param [Boolean] initiating Whether your initiator or not.
-  # @return [String] x coordinate with hex format.
-  # @raise [Secp256k1::Error] If secret is invalid or hashfp return 0.
-  def ellswift_ecdh_xonly(their_ell_pubkey, our_ell_pubkey, priv_key, initiating)
-    with_context(flags: SECP256K1_CONTEXT_SIGN) do |context|
-      output = FFI::MemoryPointer.new(:uchar, 32)
-      our_ell_ptr = FFI::MemoryPointer.new(:uchar, 64).put_bytes(0, our_ell_pubkey.key)
-      their_ell_ptr = FFI::MemoryPointer.new(:uchar, 64).put_bytes(0, their_ell_pubkey.key)
-      seckey32 = FFI::MemoryPointer.new(:uchar, 32).put_bytes(0, [priv_key].pack('H*'))
-      hashfp = secp256k1_ellswift_xdh_hash_function_bip324
-      result = secp256k1_ellswift_xdh(context, output,
-                                      initiating ? our_ell_ptr : their_ell_ptr,
-                                      initiating ? their_ell_ptr : our_ell_ptr,
-                                      seckey32,
-                                      initiating ? 0 : 1,
-                                      hashfp, nil)
-      raise Error, "secret was invalid or hashfp returned 0." unless result == 1
-      output.read_string(32).unpack1('H*')
-    end
-  end
-
   private
 
   # Calculate full public key(64 bytes) from public key(32 bytes).
-  # @param [String] pub_key x-only public key with hex format(32 bytes).
+  # @param [String] pubkey x-only public key with hex format(32 bytes).
   # @return [String] x-only public key with hex format(64 bytes).
   # @raise ArgumentError
-  def full_pubkey_from_xonly_pubkey(pub_key)
+  def full_pubkey_from_xonly_pubkey(pubkey)
     with_context do |context|
-      pubkey = [pub_key].pack('H*')
       raise ArgumentError, "Pubkey size must be #{X_ONLY_PUBKEY_SIZE} bytes." unless pubkey.bytesize == X_ONLY_PUBKEY_SIZE
       xonly_pubkey = FFI::MemoryPointer.new(:uchar, pubkey.bytesize).put_bytes(0, pubkey)
       full_pubkey = FFI::MemoryPointer.new(:uchar, 64)
@@ -269,18 +200,17 @@ module Secp256k1
     end
   end
 
-  def generate_pubkey_in_context(context, privkey, compressed: true)
+  def generate_pubkey_in_context(context, private_key, compressed: true)
     internal_pubkey = FFI::MemoryPointer.new(:uchar, 64)
-    result = secp256k1_ec_pubkey_create(context, internal_pubkey, [privkey].pack('H*'))
+    result = secp256k1_ec_pubkey_create(context, internal_pubkey, private_key)
     raise 'error creating pubkey' unless result
     serialize_pubkey_internal(context, internal_pubkey, compressed)
   end
 
-  def sign_ecdsa(data, privkey, extra_entropy)
+  def sign_ecdsa(data, private_key, extra_entropy)
     with_context do |context|
-      privkey = [privkey].pack('H*')
-      secret = FFI::MemoryPointer.new(:uchar, privkey.bytesize).put_bytes(0, privkey)
-      raise Error, 'priv_key is invalid' unless secp256k1_ec_seckey_verify(context, secret)
+      secret = FFI::MemoryPointer.new(:uchar, private_key.bytesize).put_bytes(0, private_key)
+      raise Error, 'private_key is invalid' unless secp256k1_ec_seckey_verify(context, secret)
 
       internal_signature = FFI::MemoryPointer.new(:uchar, 64)
       msg32 = FFI::MemoryPointer.new(:uchar, 32).put_bytes(0, data)
@@ -303,9 +233,9 @@ module Secp256k1
     end
   end
 
-  def sign_schnorr(data, privkey, aux_rand = nil)
+  def sign_schnorr(data, private_key, aux_rand = nil)
     with_context do |context|
-      keypair = [create_keypair(privkey)].pack('H*')
+      keypair = [create_keypair(private_key)].pack('H*')
       keypair = FFI::MemoryPointer.new(:uchar, 96).put_bytes(0, keypair)
       signature = FFI::MemoryPointer.new(:uchar, 64)
       msg32 = FFI::MemoryPointer.new(:uchar, 32).put_bytes(0, data)
@@ -318,7 +248,6 @@ module Secp256k1
   def verify_ecdsa(data, sig, pubkey)
     with_context do |context|
       return false if data.bytesize == 0
-      pubkey = [pubkey].pack('H*')
       pubkey = FFI::MemoryPointer.new(:uchar, pubkey.bytesize).put_bytes(0, pubkey)
       internal_pubkey = FFI::MemoryPointer.new(:uchar, 64)
       result = secp256k1_ec_pubkey_parse(context, internal_pubkey, pubkey, pubkey.size)
@@ -364,6 +293,17 @@ module Secp256k1
              end
     raise Error, 'error serialize pubkey' unless result || pubkey_len.read_uint64 > 0
     pubkey.read_string(pubkey_len.read_uint64).unpack1('H*')
+  end
+
+  def hex_string?(str)
+    return false if str.bytes.any? { |b| b > 127 }
+    return false if str.length % 2 != 0
+    hex_chars = str.chars.to_a
+    hex_chars.all? { |c| c =~ /[0-9a-fA-F]/ }
+  end
+
+  def hex2bin(str)
+    hex_string?(str) ? [str].pack('H*') : str
   end
 end
 
