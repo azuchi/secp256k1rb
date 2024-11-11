@@ -34,20 +34,22 @@ module Secp256k1
     # Recover public key from compact signature.
     # @param [String] data The 32-byte message hash assumed to be signed.
     # @param [String] signature The signature with binary format.
+    # @param [Integer] rec recovery id.
     # @param [Boolean] compressed whether compressed public key or not.
     # @return [String] Recovered public key with hex format.
     # @raise [Secp256k1::Error] If recover failed.
     # @raise [ArgumentError] If invalid arguments specified.
-    def recover(data, signature, compressed)
+    def recover(data, signature, rec, compressed)
       raise ArgumentError, "data must be String." unless data.is_a?(String)
+      raise ArgumentError, "rec must be Integer." unless rec.is_a?(Integer)
+      raise ArgumentError, "rec must be between 0 and 3." if rec < 0 || rec > 3
       raise ArgumentError, "signature must be String." unless signature.is_a?(String)
       signature = hex2bin(signature)
-      raise ArgumentError, "signature must be 65 bytes." unless signature.bytesize == 65
+      raise ArgumentError, "signature must be 64 bytes." unless signature.bytesize == 64
       data = hex2bin(data)
       raise ArgumentError, "data must be 32 bytes." unless data.bytesize == 32
 
       with_context do |context|
-        rec = (signature.unpack1('C') - 27) & 3
         sig = FFI::MemoryPointer.new(:uchar, 65)
         input = FFI::MemoryPointer.new(:uchar, 64).put_bytes(0, signature[1..-1])
         result = secp256k1_ecdsa_recoverable_signature_parse_compact(context, sig, input, rec)
