@@ -51,7 +51,7 @@ module Secp256k1
 
       with_context do |context|
         sig = FFI::MemoryPointer.new(:uchar, 65)
-        input = FFI::MemoryPointer.new(:uchar, 64).put_bytes(0, signature[1..-1])
+        input = FFI::MemoryPointer.new(:uchar, 64).put_bytes(0, signature)
         result = secp256k1_ecdsa_recoverable_signature_parse_compact(context, sig, input, rec)
         raise Error, 'secp256k1_ecdsa_recoverable_signature_parse_compact failed.' unless result == 1
 
