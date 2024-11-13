@@ -45,8 +45,7 @@ module Secp256k1
       raise ArgumentError, "signature must be 64 bytes." unless signature.bytesize == 65
       data = hex2bin(data)
       raise ArgumentError, "data must be 32 bytes." unless data.bytesize == 32
-      rec = signature[0].ord - 0x1b
-      rec -= 4 if compressed
+      rec = (signature[0].ord - 0x1b) & 3
       raise ArgumentError, "rec must be between 0 and 3." if rec < 0 || rec > 3
 
       with_context do |context|
