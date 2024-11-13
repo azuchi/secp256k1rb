@@ -56,7 +56,6 @@ module Secp256k1
 
         pubkey = FFI::MemoryPointer.new(:uchar, 64)
         msg = FFI::MemoryPointer.new(:uchar, data.bytesize).put_bytes(0, data)
-        sig = FFI::MemoryPointer.new(:uchar, 65).put_bytes(0, signature)
         result = secp256k1_ecdsa_recover(context, pubkey, sig, msg)
         raise Error, 'secp256k1_ecdsa_recover failed.' unless result == 1
 
