@@ -16,11 +16,14 @@ RSpec.describe Secp256k1 do
       subject { target.generate_key_pair }
       it 'should be generate' do
         expect(subject.length).to eq(2)
-        # privkey
-        expect(subject[0].length).to eq(64)
+        private_key = subject[0]
+        public_key = subject[1]
+        expect(private_key.length).to eq(64)
         # pubkey
-        expect(subject[1].length).to eq(66)
-        expect(['02', '03'].include?(subject[1][0...2])).to be true
+        expect(public_key.length).to eq(66)
+        expect(['02', '03'].include?(public_key[0...2])).to be true
+        pubkey = target.generate_pubkey(private_key)
+        expect(pubkey).to eq(public_key)
       end
     end
 
@@ -28,11 +31,15 @@ RSpec.describe Secp256k1 do
       subject { target.generate_key_pair(compressed: false) }
       it 'should be generate' do
         expect(subject.length).to eq(2)
+        private_key = subject[0]
+        public_key = subject[1]
         # privkey
-        expect(subject[0].length).to eq(64)
+        expect(private_key.length).to eq(64)
         # pubkey
-        expect(subject[1].length).to eq(130)
-        expect(subject[1][0...2]).to eq('04')
+        expect(public_key.length).to eq(130)
+        expect(public_key[0...2]).to eq('04')
+        pubkey = target.generate_pubkey(private_key, compressed: false)
+        expect(pubkey).to eq(public_key)
       end
     end
   end
