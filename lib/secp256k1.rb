@@ -250,7 +250,8 @@ module Secp256k1
 
   def generate_pubkey_in_context(context, private_key, compressed: true)
     internal_pubkey = FFI::MemoryPointer.new(:uchar, 64)
-    result = secp256k1_ec_pubkey_create(context, internal_pubkey, private_key)
+    priv_ptr = FFI::MemoryPointer.new(:uchar, 32).put_bytes(0, hex2bin(private_key))
+    result = secp256k1_ec_pubkey_create(context, internal_pubkey, priv_ptr)
     raise 'error creating pubkey' unless result
     serialize_pubkey_internal(context, internal_pubkey, compressed)
   end
