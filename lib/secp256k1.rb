@@ -15,7 +15,7 @@ module Secp256k1
   include C
   include Recover
   include SchnorrSig
-  include ELLSwift
+  include EllSwift
 
   FLAGS_TYPE_MASK = ((1 << 8) - 1)
   FLAGS_TYPE_CONTEXT = (1 << 0)

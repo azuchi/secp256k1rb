@@ -1,5 +1,5 @@
 module Secp256k1
-  module ELLSwift
+  module EllSwift
     # Decode ellswift public key.
     # @param [String] ell_key ElligatorSwift key with binary format.
     # @return [String] Decoded public key with hex format.
