@@ -25,3 +25,11 @@ RSpec.configure do |config|
     c.syntax = :expect
   end
 end
+
+RSpec.shared_context 'common setup' do
+  let(:target) do
+    class Target
+      include Secp256k1
+    end.new
+  end
+end

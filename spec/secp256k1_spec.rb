@@ -4,12 +4,7 @@ require 'spec_helper'
 require 'digest'
 
 RSpec.describe Secp256k1 do
-
-  let(:target) {
-    class Target
-      include Secp256k1
-    end.new
-  }
+  include_context "common setup"
 
   describe '#generate_key_pair' do
     context 'compressed' do
