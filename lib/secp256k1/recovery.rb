@@ -42,7 +42,7 @@ module Secp256k1
       raise ArgumentError, "data must be String." unless data.is_a?(String)
       raise ArgumentError, "signature must be String." unless signature.is_a?(String)
       signature = hex2bin(signature)
-      raise ArgumentError, "signature must be 64 bytes." unless signature.bytesize == 65
+      raise ArgumentError, "signature must be 65 bytes." unless signature.bytesize == 65
       data = hex2bin(data)
       raise ArgumentError, "data must be 32 bytes." unless data.bytesize == 32
       rec = (signature[0].ord - 0x1b) & 3
