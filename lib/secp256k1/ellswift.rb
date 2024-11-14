@@ -61,7 +61,7 @@ module Secp256k1
         our_ell_ptr = FFI::MemoryPointer.new(:uchar, 64).put_bytes(0, our_ell_pubkey)
         their_ell_ptr = FFI::MemoryPointer.new(:uchar, 64).put_bytes(0, their_ell_pubkey)
         seckey32 = FFI::MemoryPointer.new(:uchar, 32).put_bytes(0, private_key)
-        hashfp = secp256k1_ellswift_xdh_hash_function_bip324
+        hashfp = C.ellswift_xdh_hash_function_bip324
         result = secp256k1_ellswift_xdh(context, output,
                                         initiating ? our_ell_ptr : their_ell_ptr,
                                         initiating ? their_ell_ptr : our_ell_ptr,

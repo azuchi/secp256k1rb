@@ -30,10 +30,13 @@ module Secp256k1
     attach_function(:secp256k1_ecdsa_recoverable_signature_parse_compact, [:pointer, :pointer, :pointer, :int], :int)
     attach_function(:secp256k1_ellswift_decode, [:pointer, :pointer, :pointer], :int)
     attach_function(:secp256k1_ellswift_create, [:pointer, :pointer, :pointer, :pointer], :int)
-    # Define function pointer
-    callback(:secp256k1_ellswift_xdh_hash_function, [:pointer, :pointer, :pointer, :pointer, :pointer], :int)
-    attach_variable(:secp256k1_ellswift_xdh_hash_function_bip324, :secp256k1_ellswift_xdh_hash_function)
+    attach_variable(:secp256k1_ellswift_xdh_hash_function_bip324, :pointer)
     attach_function(:secp256k1_ellswift_xdh, [:pointer, :pointer, :pointer, :pointer, :pointer, :int, :pointer, :pointer], :int)
 
+    # Pointer to secp256k1_ellswift_xdh_hash_function_bip324 constant.
+    # @return [FFI::Pointer]
+    def self.ellswift_xdh_hash_function_bip324
+      FFI::Pointer.new(secp256k1_ellswift_xdh_hash_function_bip324)
+    end
   end
 end
