@@ -13,6 +13,7 @@ else
 end
 
 require "secp256k1"
+require 'csv'
 
 RSpec.configure do |config|
   # Enable flags like --only-failures and --next-failure
@@ -32,4 +33,8 @@ RSpec.shared_context 'common setup' do
       include Secp256k1
     end.new
   end
+end
+
+def read_csv(relative_path)
+  CSV.read(File.join(File.dirname(__FILE__), 'fixtures', relative_path), headers: true)
 end

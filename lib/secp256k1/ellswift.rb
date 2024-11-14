@@ -1,11 +1,13 @@
 module Secp256k1
   module EllSwift
+
     # Decode ellswift public key.
     # @param [String] ell_key ElligatorSwift key with binary format.
+    # @param [Boolean] compressed Whether to compress the public key or not.
     # @return [String] Decoded public key with hex format.
     # @raise [Secp256k1::Error] If decode failed.
     # @raise [ArgumentError] If invalid arguments specified.
-    def ellswift_decode(ell_key)
+    def ellswift_decode(ell_key, compressed: true)
       raise ArgumentError, "ell_key must be String." unless ell_key.is_a?(String)
       ell_key = hex2bin(ell_key)
       raise ArgumentError, "ell_key must be 64 bytes." unless ell_key.bytesize == 64
@@ -14,7 +16,7 @@ module Secp256k1
         internal = FFI::MemoryPointer.new(:uchar, 64)
         result = secp256k1_ellswift_decode(context, internal, ell64)
         raise Error, 'Decode failed.' unless result == 1
-        serialize_pubkey_internal(context, internal, true)
+        serialize_pubkey_internal(context, internal, compressed)
       end
     end
 
@@ -27,7 +29,7 @@ module Secp256k1
       raise ArgumentError, "private_key must be String." unless private_key.is_a?(String)
       private_key = hex2bin(private_key)
       raise ArgumentError, "private_key must be 32 bytes." unless private_key.bytesize == 32
-      with_context(flags: SECP256K1_CONTEXT_SIGN) do |context|
+      with_context(flags: CONTEXT_SIGN) do |context|
         ell64 = FFI::MemoryPointer.new(:uchar, 64)
         seckey32 = FFI::MemoryPointer.new(:uchar, 32).put_bytes(0, private_key)
         result = secp256k1_ellswift_create(context, ell64, seckey32, nil)
@@ -54,7 +56,7 @@ module Secp256k1
       raise ArgumentError, "our_ell_pubkey must be #{ELL_SWIFT_KEY_SIZE} bytes." unless our_ell_pubkey.bytesize == ELL_SWIFT_KEY_SIZE
       raise ArgumentError, "private_key must be 32 bytes." unless private_key.bytesize == 32
 
-      with_context(flags: SECP256K1_CONTEXT_SIGN) do |context|
+      with_context(flags: CONTEXT_SIGN) do |context|
         output = FFI::MemoryPointer.new(:uchar, 32)
         our_ell_ptr = FFI::MemoryPointer.new(:uchar, 64).put_bytes(0, our_ell_pubkey)
         their_ell_ptr = FFI::MemoryPointer.new(:uchar, 64).put_bytes(0, their_ell_pubkey)
