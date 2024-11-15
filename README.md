@@ -1,8 +1,6 @@
 # secp256k1rb
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/secp256k1`. To experiment with that code, run `bin/console` for an interactive prompt.
-
-TODO: Delete this and the text above, and describe your gem
+This is a Ruby binding for Bitcoin Core's [secp256k1 library](https://github.com/bitcoin-core/secp256k1/).
 
 ## Installation
 
@@ -22,22 +20,23 @@ Or install it yourself as:
 
 ## Usage
 
-TODO: Write usage instructions here
+To use this library, you need to specify the path of the secp256k1 shared library in environment variable
+`SECP256K1_LIB_PATH`, e.g: `$ export SECP256K1_LIB_PATH=/var/local/lib/libsecp256k1.so`.
 
-## Development
+By including the Secp256k1 module, you can use the features provided by the `libsepc256k1` library. For example:
 
-After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
+```ruby
+require 'secp256k1'
 
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and the created tag, and push the `.gem` file to [rubygems.org](https://rubygems.org).
+include Secp256k1
 
-## Contributing
+generate_key_pair
+=> ["e00c2ae99e59b5262be3d507d026081f0e6cf9972ffdd4f2d45a390f7a41b053", "027e0f70b540d627422cf7bb77d86ae1bb6829c80104dd48dc2539e6277ea25624"]
+```
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/secp256k1. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [code of conduct](https://github.com/[USERNAME]/secp256k1/blob/master/CODE_OF_CONDUCT.md).
+See [here](https://www.rubydoc.info/gems/secp256k1rb/Secp256k1) for available methods.
+In addition, the following modules are also included, so you can use them as they are.
 
-## License
-
-The gem is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).
-
-## Code of Conduct
-
-Everyone interacting in the Secp256k1 project's codebases, issue trackers, chat rooms and mailing lists is expected to follow the [code of conduct](https://github.com/[USERNAME]/secp256k1/blob/master/CODE_OF_CONDUCT.md).
+* [Recover](https://www.rubydoc.info/gems/secp256k1rb/Secp256k1/Recover)
+* [SchnorrSig](https://www.rubydoc.info/gems/secp256k1rb/Secp256k1/SchnorrSig)
+* [EllSwift](https://www.rubydoc.info/gems/secp256k1rb/Secp256k1/EllSwift)
