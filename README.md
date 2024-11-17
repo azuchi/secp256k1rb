@@ -23,6 +23,9 @@ Or install it yourself as:
 To use this library, you need to specify the path of the secp256k1 shared library in environment variable
 `SECP256K1_LIB_PATH`, e.g: `$ export SECP256K1_LIB_PATH=/var/local/lib/libsecp256k1.so`.
 
+Note: This library also implements the recovery module, so you must have built the secp256k1 library with the
+`--enable-module-recovery` option.
+
 By including the Secp256k1 module, you can use the features provided by the `libsepc256k1` library. For example:
 
 ```ruby
