@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+require 'json'
 
 host_os = RbConfig::CONFIG['host_os']
 case host_os
@@ -38,3 +39,10 @@ end
 def read_csv(relative_path)
   CSV.read(File.join(File.dirname(__FILE__), 'fixtures', relative_path), headers: true)
 end
+
+def read_json(relative_path)
+  file = File.read(File.join(File.dirname(__FILE__), 'fixtures', relative_path))
+  JSON.load(file)
+end
+
+

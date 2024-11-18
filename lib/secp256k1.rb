@@ -6,6 +6,7 @@ require_relative 'secp256k1/c'
 require_relative 'secp256k1/recovery'
 require_relative 'secp256k1/ellswift'
 require_relative 'secp256k1/schnorrsig'
+require_relative 'secp256k1/musig'
 
 # Binding for secp256k1 (https://github.com/bitcoin-core/secp256k1/)
 module Secp256k1
@@ -16,6 +17,7 @@ module Secp256k1
   include Recover
   include SchnorrSig
   include EllSwift
+  include MuSig
 
   FLAGS_TYPE_MASK = ((1 << 8) - 1)
   FLAGS_TYPE_CONTEXT = (1 << 0)
