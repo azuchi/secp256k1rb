@@ -8,9 +8,8 @@ module Secp256k1
     # @raise [Secp256k1::Error] If decode failed.
     # @raise [ArgumentError] If invalid arguments specified.
     def ellswift_decode(ell_key, compressed: true)
-      raise ArgumentError, "ell_key must be String." unless ell_key.is_a?(String)
+      validate_string!("ell_key", ell_key, ELL_SWIFT_KEY_SIZE)
       ell_key = hex2bin(ell_key)
-      raise ArgumentError, "ell_key must be 64 bytes." unless ell_key.bytesize == 64
       with_context do |context|
         ell64 = FFI::MemoryPointer.new(:uchar, ell_key.bytesize).put_bytes(0, ell_key)
         internal = FFI::MemoryPointer.new(:uchar, 64)
@@ -26,9 +25,8 @@ module Secp256k1
     # @raise [Secp256k1::Error] If failed to create elligattor swhift public key.
     # @raise [ArgumentError] If invalid arguments specified.
     def ellswift_create(private_key)
-      raise ArgumentError, "private_key must be String." unless private_key.is_a?(String)
+      validate_string!("private_key", private_key, 32)
       private_key = hex2bin(private_key)
-      raise ArgumentError, "private_key must be 32 bytes." unless private_key.bytesize == 32
       with_context(flags: CONTEXT_SIGN) do |context|
         ell64 = FFI::MemoryPointer.new(:uchar, 64)
         seckey32 = FFI::MemoryPointer.new(:uchar, 32).put_bytes(0, private_key)
@@ -46,15 +44,12 @@ module Secp256k1
     # @return [String] x coordinate with hex format.
     # @raise [Secp256k1::Error] If secret is invalid or hashfp return 0.
     def ellswift_ecdh_xonly(their_ell_pubkey, our_ell_pubkey, private_key, initiating)
-      raise ArgumentError, "their_ell_pubkey must be String." unless their_ell_pubkey.is_a?(String)
-      raise ArgumentError, "our_ell_pubkey must be String." unless our_ell_pubkey.is_a?(String)
-      raise ArgumentError, "private_key must be String." unless private_key.is_a?(String)
+      validate_string!("their_ell_pubkey", their_ell_pubkey, ELL_SWIFT_KEY_SIZE)
+      validate_string!("our_ell_pubkey", our_ell_pubkey, ELL_SWIFT_KEY_SIZE)
+      validate_string!("private_key", private_key, 32)
       their_ell_pubkey = hex2bin(their_ell_pubkey)
       our_ell_pubkey = hex2bin(our_ell_pubkey)
       private_key = hex2bin(private_key)
-      raise ArgumentError, "their_ell_pubkey must be #{ELL_SWIFT_KEY_SIZE} bytes." unless their_ell_pubkey.bytesize == ELL_SWIFT_KEY_SIZE
-      raise ArgumentError, "our_ell_pubkey must be #{ELL_SWIFT_KEY_SIZE} bytes." unless our_ell_pubkey.bytesize == ELL_SWIFT_KEY_SIZE
-      raise ArgumentError, "private_key must be 32 bytes." unless private_key.bytesize == 32
 
       with_context(flags: CONTEXT_SIGN) do |context|
         output = FFI::MemoryPointer.new(:uchar, 32)

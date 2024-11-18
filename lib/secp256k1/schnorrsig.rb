@@ -4,17 +4,16 @@ module Secp256k1
     # Sign to data using schnorr.
     # @param [String] data The 32-byte message hash being signed with binary format.
     # @param [String] private_key a private key with hex format using sign.
-    # @param [String] aux_rand a extra entropy.
+    # @param [String] aux_rand The 32-byte extra entropy.
     # @return [String] signature data with binary format. If unsupported algorithm specified, return nil.
     # @raise [ArgumentError] If invalid arguments specified.
     def sign_schnorr(data, private_key, aux_rand = nil)
-      raise ArgumentError, "private_key must be String." unless private_key.is_a?(String)
-      raise ArgumentError, "data must by String." unless data.is_a?(String)
+      validate_string!("data", data, 32)
+      validate_string!("private_key", private_key, 32)
+      validate_string!("aux_rand", aux_rand, 32) if aux_rand
       raise ArgumentError, "aux_rand must be String." if !aux_rand.nil? && !aux_rand.is_a?(String)
       private_key = hex2bin(private_key)
-      raise ArgumentError, "private_key must be 32 bytes." unless private_key.bytesize == 32
       data = hex2bin(data)
-      raise ArgumentError, "data must be 32 bytes." unless data.bytesize == 32
 
       with_context do |context|
         keypair = [create_keypair(private_key)].pack('H*')
@@ -34,11 +33,10 @@ module Secp256k1
     # @return [Boolean] verification result.
     # @raise [ArgumentError] If invalid arguments specified.
     def verify_schnorr(data, signature, pubkey)
-      raise ArgumentError, "sig must be String." unless signature.is_a?(String)
-      raise ArgumentError, "pubkey must be String." unless pubkey.is_a?(String)
-      raise ArgumentError, "data must be String." unless data.is_a?(String)
+      validate_string!("data", data, 32)
+      validate_string!("signature", signature, 64)
+      validate_string!("pubkey", pubkey, 32)
       data = hex2bin(data)
-      raise ArgumentError, "data must be 32 bytes." unless data.bytesize == 32
       pubkey = hex2bin(pubkey)
       signature = hex2bin(signature)
       with_context do |context|

@@ -7,13 +7,10 @@ module Secp256k1
     # @raise [Secp256k1::Error] If recovery failed.
     # @raise [ArgumentError] If invalid arguments specified.
     def sign_recoverable(data, private_key)
-      raise ArgumentError, "private_key must be String." unless private_key.is_a?(String)
-      raise ArgumentError, "data must by String." unless data.is_a?(String)
+      validate_string!("private_key", private_key, 32)
+      validate_string!("data", data, 32)
       private_key = hex2bin(private_key)
-      raise ArgumentError, "private_key must be 32 bytes." unless private_key.bytesize == 32
       data = hex2bin(data)
-      raise ArgumentError, "data must be 32 bytes." unless data.bytesize == 32
-
       with_context do |context|
         sig = FFI::MemoryPointer.new(:uchar, 65)
         hash =FFI::MemoryPointer.new(:uchar, data.bytesize).put_bytes(0, data)
@@ -39,12 +36,10 @@ module Secp256k1
     # @raise [Secp256k1::Error] If recover failed.
     # @raise [ArgumentError] If invalid arguments specified.
     def recover(data, signature, compressed)
-      raise ArgumentError, "data must be String." unless data.is_a?(String)
-      raise ArgumentError, "signature must be String." unless signature.is_a?(String)
+      validate_string!("data", data, 32)
+      validate_string!("signature", signature, 65)
       signature = hex2bin(signature)
-      raise ArgumentError, "signature must be 65 bytes." unless signature.bytesize == 65
       data = hex2bin(data)
-      raise ArgumentError, "data must be 32 bytes." unless data.bytesize == 32
       rec = (signature[0].ord - 0x1b) & 3
       raise ArgumentError, "rec must be between 0 and 3." if rec < 0 || rec > 3
 

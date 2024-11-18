@@ -81,9 +81,8 @@ module Secp256k1
   # @return [String] Public key with hex format.
   # @raise [ArgumentError] If invalid arguments specified.
   def generate_pubkey(private_key, compressed: true)
-    raise  ArgumentError, "private_key must be String." unless private_key.is_a?(String)
+    validate_string!("private_key", private_key, 32)
     private_key = hex2bin(private_key)
-    raise ArgumentError, "private_key must by 32 bytes." unless private_key.bytesize == 32
     with_context do |context|
       generate_pubkey_in_context(context, private_key, compressed: compressed)
     end
@@ -133,9 +132,8 @@ module Secp256k1
   # @raise [Secp256k1::Error] If private_key is invalid.
   # @raise [ArgumentError] If invalid arguments specified.
   def create_keypair(private_key)
-    raise ArgumentError, "private_key must be String." unless private_key.is_a?(String)
+    validate_string!("private_key", private_key, 32)
     private_key = hex2bin(private_key)
-    raise ArgumentError, "private_key must be 32 bytes." unless private_key.bytesize == 32
     with_context do |context|
       secret = FFI::MemoryPointer.new(:uchar, private_key.bytesize).put_bytes(0, private_key)
       raise Error, 'private_key is invalid.' unless secp256k1_ec_seckey_verify(context, secret)
@@ -161,17 +159,15 @@ module Secp256k1
   # Sign to data using ecdsa.
   # @param [String] data The 32-byte message hash being signed with binary format.
   # @param [String] private_key a private key with hex format using sign.
-  # @param [String] extra_entropy a extra entropy with binary format for rfc6979.
+  # @param [String] extra_entropy An extra entropy with binary format for rfc6979.
   # @return [String] signature data with binary format. If unsupported algorithm specified, return nil.
   # @raise [ArgumentError] If invalid arguments specified.
   def sign_ecdsa(data, private_key, extra_entropy)
-    raise ArgumentError, "private_key must be String." unless private_key.is_a?(String)
-    raise ArgumentError, "data must by String." unless data.is_a?(String)
-    raise ArgumentError, "extra_entropy must be String." if !extra_entropy.nil? && !extra_entropy.is_a?(String)
+    validate_string!("private_key", private_key, 32)
+    validate_string!("data", data, 32)
+    validate_string!("extra_entropy", extra_entropy, 32) if extra_entropy
     private_key = hex2bin(private_key)
-    raise ArgumentError, "private_key must be 32 bytes." unless private_key.bytesize == 32
     data = hex2bin(data)
-    raise ArgumentError, "data must be 32 bytes." unless data.bytesize == 32
 
     with_context do |context|
       secret = FFI::MemoryPointer.new(:uchar, private_key.bytesize).put_bytes(0, private_key)
@@ -207,9 +203,8 @@ module Secp256k1
   def verify_ecdsa(data, signature, pubkey)
     raise ArgumentError, "sig must be String." unless signature.is_a?(String)
     raise ArgumentError, "pubkey must be String." unless pubkey.is_a?(String)
-    raise ArgumentError, "data must be String." unless data.is_a?(String)
+    validate_string!("data", data, 32)
     data = hex2bin(data)
-    raise ArgumentError, "data must be 32 bytes." unless data.bytesize == 32
     pubkey = hex2bin(pubkey)
     signature = hex2bin(signature)
     with_context do |context|
@@ -282,6 +277,11 @@ module Secp256k1
 
   def hex2bin(str)
     hex_string?(str) ? [str].pack('H*') : str
+  end
+
+  def validate_string!(name, target, byte_length)
+    raise ArgumentError, "#{name} must be String." unless target.is_a?(String)
+    raise ArgumentError, "#{name} must be #{byte_length} bytes." unless hex2bin(target).bytesize == byte_length
   end
 end
 
