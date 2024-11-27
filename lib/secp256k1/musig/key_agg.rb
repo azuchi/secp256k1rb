@@ -28,10 +28,40 @@ module Secp256k1
           if secp256k1_musig_pubkey_get(context, agg_pubkey, cache.pointer) == 0
             raise Error, "secp256k1_musig_pubkey_get arguments invalid."
           end
-          xonly = FFI::MemoryPointer.new(:uchar, 32)
-          secp256k1_xonly_pubkey_serialize(context, xonly, agg_pubkey)
-          xonly.read_string(32).unpack1('H*')
+          serialize_pubkey(context, agg_pubkey)
         end
+      end
+
+      # Apply ordinary "EC" tweaking to a public key.
+      # @param [String] tweak Tweak value to tweak the aggregated key.
+      # @param [Boolean] xonly Apply x-only tweaking or not.
+      # @return [String] Tweaked x-only public key with hex format.
+      # @raise [ArgumentError] If invalid arguments specified.
+      # @raise [Secp256k1::Error]
+      def tweak_add(tweak, xonly: false)
+        validate_string!("tweak", tweak, 32)
+        with_context do |context|
+          tweak_ptr = FFI::MemoryPointer.new(:uchar, 32).put_bytes(0, hex2bin(tweak))
+          pubkey_ptr = FFI::MemoryPointer.new(:uchar, 64)
+          if xonly
+            if secp256k1_musig_pubkey_xonly_tweak_add(context, pubkey_ptr, cache.pointer, tweak_ptr) == 0
+              raise Error, "secp256k1_musig_pubkey_tweak_add arguments invalid."
+            end
+          else
+            if secp256k1_musig_pubkey_ec_tweak_add(context, pubkey_ptr, cache.pointer, tweak_ptr) == 0
+              raise Error, "secp256k1_musig_pubkey_tweak_add arguments invalid."
+            end
+          end
+          serialize_pubkey(context, pubkey_ptr)
+        end
+      end
+
+      private
+
+      def serialize_pubkey(context, pubkey_ptr)
+        xonly = FFI::MemoryPointer.new(:uchar, 32)
+        secp256k1_xonly_pubkey_serialize(context, xonly, pubkey_ptr)
+        xonly.read_string(32).unpack1('H*')
       end
     end
   end
