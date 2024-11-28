@@ -6,6 +6,7 @@ module Secp256k1
     # Aggregate public keys.
     # @param [Array] pubkeys An array of public keys.
     # @return [Secp2561k::MuSig::KeyAggContext]
+    # @raise [Secp256k1::Error]
     def aggregate_pubkey(pubkeys)
       raise ArgumentError, "pubkeys must be an array." unless pubkeys.is_a?(Array)
       with_context do |context|
@@ -25,6 +26,52 @@ module Secp256k1
           raise Error, "secp256k1_musig_pubkey_agg argument error."
         end
         Secp256k1::MuSig::KeyAggContext.new(cache)
+      end
+    end
+
+    # Generate fresh session id for musig signing session.
+    # @return [String] The session id.
+    def generate_musig_session_id
+      SecureRandom.random_bytes(32).unpack1('H*')
+    end
+
+    # Generate nonce pair.
+    # @param [String] session_id The uniform random identifier for this session.
+    # @param [String] pk The public key for which the partial signature is generated.
+    # @param [String] sk (Optional) The private key for which the partial signature is generated.
+    # @param [Secp256k1::MuSig::KeyAggContext] key_agg_ctx (Optional) The aggregated public key context.
+    # @param [String] msg (Optional) The message to be signed.
+    # @param [String] extra_in (Optional) The auxiliary input.
+    # @return [Array(String)] The array of secret nonce and public nonce with hex format.
+    # @raise [ArgumentError] If invalid arguments specified.
+    # @raise [Secp256k1::Error]
+    def generate_musig_nonce(session_id, pk, sk: nil, key_agg_ctx: nil, msg: nil, extra_in: nil)
+      validate_string!("session_id", session_id, 32)
+      validate_string!("pk", pk, 33)
+      validate_string!("sk", sk, 32) if sk
+      validate_string!("msg", msg, 32) if msg
+      validate_string!("extra_in", extra_in, 32) if extra_in
+
+      if key_agg_ctx
+        raise ArgumentError, "key_agg must be Secp256k1::MuSig::KeyAggContext." unless key_agg_ctx.is_a?(KeyAggContext)
+      end
+
+      with_context do |context|
+        pk_ptr = FFI::MemoryPointer.new(:uchar, 33).put_bytes(0, hex2bin(pk))
+        pubkey = FFI::MemoryPointer.new(:uchar, 64)
+        raise Error, "pk is invalid public key." unless secp256k1_ec_pubkey_parse(context, pubkey, pk_ptr, 33) == 1
+
+        pubnonce = FFI::MemoryPointer.new(:uchar, 132)
+        secnonce = FFI::MemoryPointer.new(:uchar, 132)
+        seckey = sk ? FFI::MemoryPointer.new(:uchar, 32).put_bytes(0, hex2bin(sk)) : nil
+        msg32 = msg ? FFI::MemoryPointer.new(:uchar, 32).put_bytes(0, hex2bin(msg)) : nil
+        extra_input32 = extra_in ? FFI::MemoryPointer.new(:uchar, 32).put_bytes(0, hex2bin(extra_in)) : nil
+        session_secrand32 = FFI::MemoryPointer.new(:uchar, 32).put_bytes(0, hex2bin(session_id))
+
+        raise Error, "arguments is invalid." unless secp256k1_musig_nonce_gen(
+          context, secnonce, pubnonce, session_secrand32, seckey, pubkey, msg32, key_agg_ctx.cache.pointer, extra_input32) == 1
+
+        [secnonce.read_string(132).unpack1('H*'), pubnonce.read_string(132).unpack1('H*')]
       end
     end
 
