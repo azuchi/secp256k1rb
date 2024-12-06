@@ -1,4 +1,5 @@
 require_relative 'musig/key_agg'
+require_relative 'musig/session'
 
 module Secp256k1
   module MuSig
@@ -15,7 +16,7 @@ module Secp256k1
           validate_string!('pubkey', pubkey, 33)
           input = FFI::MemoryPointer.new(:uchar, 33).put_bytes(0, pubkey)
           pubkey_ptr = FFI::MemoryPointer.new(:uchar, 64)
-          raise Error, "pubkey is invalid public key." unless secp256k1_ec_pubkey_parse(context, pubkey_ptr, input, 33) == 1
+          raise Error, "pubkey is invalid." unless secp256k1_ec_pubkey_parse(context, pubkey_ptr, input, 33) == 1
           pubkey_ptr
         end
         pubkeys_ptr = FFI::MemoryPointer.new(:pointer, pubkeys.length)
@@ -69,9 +70,11 @@ module Secp256k1
         session_secrand32 = FFI::MemoryPointer.new(:uchar, 32).put_bytes(0, hex2bin(session_id))
 
         raise Error, "arguments is invalid." unless secp256k1_musig_nonce_gen(
-          context, secnonce, pubnonce, session_secrand32, seckey, pubkey, msg32, key_agg_ctx.cache.pointer, extra_input32) == 1
+          context, secnonce, pubnonce, session_secrand32, seckey, pubkey, msg32, key_agg_ctx.pointer, extra_input32) == 1
 
-        [secnonce.read_string(132).unpack1('H*'), pubnonce.read_string(132).unpack1('H*')]
+        pub66 = FFI::MemoryPointer.new(:uchar, 66)
+        secp256k1_musig_pubnonce_serialize(context, pub66, pubnonce)
+        [secnonce.read_string(132).unpack1('H*'), pub66.read_string(66).unpack1('H*')]
       end
     end
 
@@ -80,28 +83,28 @@ module Secp256k1
     # @return [String] An aggregated public nonce.
     # @raise [Secp256k1::Error]
     # @raise [ArgumentError] If invalid arguments specified.
-    def aggregate_nonce(pub_nonces)
-      raise ArgumentError, "nonces must be Array." unless pub_nonces.is_a?(Array)
+    def aggregate_musig_nonce(pub_nonces)
+      raise ArgumentError, "pub_nonces must be Array." unless pub_nonces.is_a?(Array)
 
       with_context do |context|
         nonce_ptrs = pub_nonces.map do |pub_nonce|
-          validate_string!("pub_nonce", pub_nonce, 66)
           pub_nonce = hex2bin(pub_nonce)
-          in_ptr = FFI::MemoryPointer.new(:uchar, pub_nonce.bytesize).put_bytes(0, pub_nonce)
-          out_ptr = FFI::MemoryPointer.new(:uchar, 132)
-          result = secp256k1_musig_pubnonce_parse(context, out_ptr, in_ptr)
-          raise Error, "pub_nonce parse failed." unless result == 1
-          out_ptr
+          validate_string!("pub_nonce", pub_nonce, 66)
+          in66 = FFI::MemoryPointer.new(:uchar, 66).put_bytes(0, pub_nonce)
+          pub_nonce_ptr = FFI::MemoryPointer.new(:uchar, 132)
+          if secp256k1_musig_pubnonce_parse(context, pub_nonce_ptr, in66) == 0
+            raise Error, "secp256k1_musig_pubnonce_parse error."
+          end
+          pub_nonce_ptr
         end
         agg_nonce = FFI::MemoryPointer.new(:uchar, 132)
         pubnonces = FFI::MemoryPointer.new(:pointer, pub_nonces.length)
         pubnonces.write_array_of_pointer(nonce_ptrs)
         result = secp256k1_musig_nonce_agg(context, agg_nonce, pubnonces, pub_nonces.length)
         raise Error, "nonce aggregation failed." if result == 0
-
-        serialized =  FFI::MemoryPointer.new(:uchar, 66)
-        secp256k1_musig_aggnonce_serialize(context, serialized, agg_nonce)
-        serialized.read_string(66).unpack1('H*')
+        out66 = FFI::MemoryPointer.new(:uchar, 66)
+        secp256k1_musig_aggnonce_serialize(context, out66, agg_nonce)
+        out66.read_string(66).unpack1("H*")
       end
     end
   end

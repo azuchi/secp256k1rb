@@ -56,6 +56,12 @@ module Secp256k1
         end
       end
 
+      # Get KeyAggCache pointer.
+      # @return [FFI::MemoryPointer]
+      def pointer
+        cache.pointer
+      end
+
       private
 
       def serialize_pubkey(context, pubkey_ptr)
