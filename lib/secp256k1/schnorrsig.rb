@@ -1,4 +1,14 @@
 module Secp256k1
+  # SchnorrSig module
+  # @example
+  #   include Secp256k1
+  #
+  #   sk, pk = generate_key_pair
+  #
+  #   # sign and verify (Schnorr)
+  #   signature = sign_schnorr(msg, sk)
+  #   verify_schnorr(msg, signature, pk[2..-1]) # public key must be 32 bytes
+  #
   module SchnorrSig
 
     # Sign to data using schnorr.

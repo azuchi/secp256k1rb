@@ -1,4 +1,15 @@
 module Secp256k1
+  # Recover module
+  # @example
+  #   include Secp256k1
+  #
+  #   sk, _ = generate_key_pair
+  #   msg = Digest::SHA256.digest('message')
+  #   sig, rec = sign_recoverable(msg, sk)
+  #   full_sig = [rec + 0x1b + 4].pack('C') + [sig].pack('H*')
+  #   compressed = true
+  #   recover_pubkey = target.recover(msg, full_sig, compressed)
+  #
   module Recover
     # Sign data with compact format.
     # @param [String] data The 32-byte message hash being signed.

@@ -9,6 +9,20 @@ require_relative 'secp256k1/schnorrsig'
 require_relative 'secp256k1/musig'
 
 # Binding for secp256k1 (https://github.com/bitcoin-core/secp256k1/)
+# @example
+#   include Secp256k1
+#
+#   # Generate key pair
+#   sk, pk = generate_key_pair
+#
+#   # Generate public key
+#   pk = generate_pubkey(sk)
+#
+#   # sign and verify (ECDSA)
+#   msg = Digest::SHA256.digest('message')
+#   signature = sign_ecdsa(msg, sk)
+#   verify_ecdsa(msg, signature, pk)
+#
 module Secp256k1
 
   class Error < StandardError; end
@@ -139,7 +153,7 @@ module Secp256k1
   # Sign to data using ecdsa.
   # @param [String] data The 32-byte message hash being signed with binary format.
   # @param [String] private_key a private key with hex format using sign.
-  # @param [String] extra_entropy An extra entropy with binary format for rfc6979.
+  # @param [String] extra_entropy (Optional)An extra entropy with binary format for rfc6979.
   # @return [String] signature data with binary format. If unsupported algorithm specified, return nil.
   # @raise [ArgumentError] If invalid arguments specified.
   def sign_ecdsa(data, private_key, extra_entropy = nil)
