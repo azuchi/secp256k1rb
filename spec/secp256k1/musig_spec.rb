@@ -34,11 +34,11 @@ RSpec.describe Secp256k1::MuSig do
             expect{target.aggregate_pubkey(pubkey_candidates)}.to raise_error(Secp256k1::Error)
           else
             agg_key_ctx = target.aggregate_pubkey(pubkey_candidates)
-            # error['tweak_indices'].each do |index|
-            #   tweak = tweaks[index]
-            #   is_xonly = error['is_xonly'][index]
-            #   expect{agg_key_ctx.apply_tweak(tweak, is_xonly)}.to raise_error(ArgumentError, error['error']['comment'])
-            # end
+            error['tweak_indices'].each do |index|
+              tweak = tweaks[index]
+              is_xonly = error['is_xonly'][index]
+              expect{agg_key_ctx.tweak_add(tweak, xonly: is_xonly)}.to raise_error(Secp256k1::Error)
+            end
           end
         end
       end
@@ -70,6 +70,44 @@ RSpec.describe Secp256k1::MuSig do
       agg_pubkey = key_agg_ctx.aggregate_public_key
       expect(agg_pubkey).to eq(tweaked)
       expect(agg_pubkey).to eq("bddba4bdf75f1d95695b4851938ce2139c79c0e291c5f0e9ec901ed6ae9859cd")
+    end
+  end
+
+  describe "sig_agg_vectors" do
+    let(:vector) { read_json('sig_agg_vectors.json') }
+    it do
+      partial_sigs = vector['psigs']
+      vector['valid_test_cases'].each do |test|
+        target_pubkeys = test['key_indices'].map {|i| pubkeys[i] }
+        target_pub_nonces = test['nonce_indices'].map {|i| pub_nonces[i] }
+        agg_nonce = test['aggnonce']
+        msg = vector['msg']
+        expect(target.aggregate_musig_nonce(target_pub_nonces)).to eq(agg_nonce.downcase)
+        expected = test['expected']
+
+        key_agg_ctx = target.aggregate_pubkey(target_pubkeys)
+        test['tweak_indices'].map do|i|
+          key_agg_ctx.tweak_add(vector['tweaks'][i], xonly: test['is_xonly'][i])
+        end
+
+        target_partial_sigs = test['psig_indices'].map {|i| partial_sigs[i] }
+        musig_session = Secp256k1::MuSig::Session.new(key_agg_ctx, agg_nonce, msg)
+        sig = musig_session.aggregate_partial_sigs(target_partial_sigs)
+        expect(sig).to eq(expected.downcase)
+        expect(target.verify_schnorr(msg, sig, key_agg_ctx.aggregate_public_key)).to be true
+      end
+      vector['error_test_cases'].each do |test|
+        target_pubkeys = test['key_indices'].map {|i| pubkeys[i] }
+        msg = vector['msg']
+        agg_nonce = test['aggnonce']
+        key_agg_ctx = target.aggregate_pubkey(target_pubkeys)
+        test['tweak_indices'].map do|i|
+          key_agg_ctx.tweak_add(vector['tweaks'][i], xonly: test['is_xonly'][i])
+        end
+        target_partial_sigs = test['psig_indices'].map {|i| partial_sigs[i] }
+        musig_session = Secp256k1::MuSig::Session.new(key_agg_ctx, agg_nonce, msg)
+        expect{musig_session.aggregate_partial_sigs(target_partial_sigs)}.to raise_error(Secp256k1::Error)
+      end
     end
   end
 

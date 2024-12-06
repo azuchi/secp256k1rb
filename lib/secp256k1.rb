@@ -96,7 +96,6 @@ module Secp256k1
   # @return [String] signature data with binary format. If unsupported algorithm specified, return nil.
   # @raise [ArgumentError] If invalid arguments specified.
   def sign_data(data, private_key, extra_entropy = nil, algo: :ecdsa)
-
     case algo
     when :ecdsa
       sign_ecdsa(data, private_key, extra_entropy)
