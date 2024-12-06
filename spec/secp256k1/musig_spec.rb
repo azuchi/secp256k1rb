@@ -75,19 +75,12 @@ RSpec.describe Secp256k1::MuSig do
 
   describe "sign and verify" do
     it do
-      n_signers = 2
+      n_signers = 3
       msg = Digest::SHA256.digest('message')
-      msg = '746869735f636f756c645f62655f7468655f686173685f6f665f615f6d736721'
 
-      private1 = "deedd64ebbe80e86465b13a2860f2c8bfba95ac8ce1ab34bbfb7c052d0c9dd14"
-      private2 = "e57a634aa269100b2548fe9e900e037ca138eaa5ac11374db647149876fef47a"
-      pubkey1 = target.generate_pubkey(private1)
-      pubkey2 = target.generate_pubkey(private2)
-      signers_key = [[private1, pubkey1], [private2, pubkey2]]
-
-      # signers_key = n_signers.times.map do
-      #   target.generate_key_pair
-      # end
+      signers_key = n_signers.times.map do
+        target.generate_key_pair
+      end
       sorted_keys = signers_key.sort{|a, b| a[1] <=> b[1]}
       sorted_pubkeys = sorted_keys.map{|k|k[1]}
       sorted_private_keys = sorted_keys.map{|k|k[0]}
@@ -97,7 +90,6 @@ RSpec.describe Secp256k1::MuSig do
       tweaked = key_agg_ctx.tweak_add(xonly_tweak, xonly: true)
       agg_pubkey = key_agg_ctx.aggregate_public_key
       expect(agg_pubkey).to eq(tweaked)
-      expect(agg_pubkey).to eq("bddba4bdf75f1d95695b4851938ce2139c79c0e291c5f0e9ec901ed6ae9859cd")
 
       nonce_pairs = n_signers.times.map do |i|
         session_id = target.generate_musig_session_id
@@ -113,12 +105,18 @@ RSpec.describe Secp256k1::MuSig do
       pub_nonces = nonce_pairs.map{|p|p[1]}
       agg_nonce = target.aggregate_musig_nonce(pub_nonces)
       musig_session = Secp256k1::MuSig::Session.new(key_agg_ctx, agg_nonce, msg)
-      partial_sig1 = musig_session.partial_sign(nonce_pairs[0][0], sorted_keys[0][0])
-      partial_sig2 = musig_session.partial_sign(nonce_pairs[1][0], sorted_keys[1][0])
-      expect(musig_session.valid_partial_sig?(partial_sig1, nonce_pairs[0][1], sorted_keys[0][1])).to be true
-      expect(musig_session.valid_partial_sig?(partial_sig2, nonce_pairs[1][1], sorted_keys[1][1])).to be true
-      expect(musig_session.valid_partial_sig?(partial_sig1, nonce_pairs[1][1], sorted_keys[1][1])).to be false
-      expect(musig_session.valid_partial_sig?(partial_sig2, nonce_pairs[0][1], sorted_keys[0][1])).to be false
+
+      partial_sigs = n_signers.times.map do |i|
+        partial_sig = musig_session.partial_sign(nonce_pairs[i][0], sorted_keys[i][0])
+        expect(musig_session.verify_partial_sig(partial_sig, nonce_pairs[i][1], sorted_keys[i][1])).to be true
+        dummy_pubkey = target.generate_key_pair[1]
+        expect(musig_session.verify_partial_sig(partial_sig, nonce_pairs[i][1], dummy_pubkey)).to be false
+        partial_sig
+      end
+
+      agg_sig = musig_session.aggregate_partial_sigs(partial_sigs)
+      expect(target.verify_schnorr(msg, agg_sig, agg_pubkey)).to be true
+      expect(target.verify_schnorr(msg, agg_sig, sorted_keys[0][1][2..-1])).to be false
     end
   end
 end

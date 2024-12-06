@@ -53,6 +53,7 @@ module Secp256k1
     attach_function(:secp256k1_musig_partial_sig_serialize, [:pointer, :pointer, :pointer], :int)
     attach_function(:secp256k1_musig_partial_sig_parse, [:pointer, :pointer, :pointer], :int)
     attach_function(:secp256k1_musig_partial_sig_verify, [:pointer, :pointer, :pointer, :pointer, :pointer, :pointer], :int)
+    attach_function(:secp256k1_musig_partial_sig_agg, [:pointer, :pointer, :pointer, :pointer, :size_t], :int)
 
     # Pointer to secp256k1_ellswift_xdh_hash_function_bip324 constant.
     # @return [FFI::Pointer]

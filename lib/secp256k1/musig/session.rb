@@ -70,16 +70,12 @@ module Secp256k1
       # @return [Boolean] The verification result.
       # @raise [ArgumentError] If invalid arguments specified.
       # @raise [Secp256k1::Error]
-      def valid_partial_sig?(partial_sig, pub_nonce, public_key)
+      def verify_partial_sig(partial_sig, pub_nonce, public_key)
         validate_string!('partial_sig', partial_sig, 32)
         validate_string!('pub_nonce', pub_nonce, 66)
         validate_string!('public_key', public_key, 33)
         with_context do |context|
-          partial_sig = FFI::MemoryPointer.new(:uchar, 32).put_bytes(0, hex2bin(partial_sig))
-          sig_ptr = FFI::MemoryPointer.new(:uchar, 36)
-          if secp256k1_musig_partial_sig_parse(context, sig_ptr, partial_sig) == 0
-            raise Error, "secp256k1_musig_partial_sig_parse failed."
-          end
+          sig_ptr = parse_partial_sig(context, partial_sig)
           public_key = FFI::MemoryPointer.new(:uchar, 33).put_bytes(0, hex2bin(public_key))
           pubkey_ptr = FFI::MemoryPointer.new(:uchar, 64)
           raise Error, "pubkey is invalid." unless secp256k1_ec_pubkey_parse(context, pubkey_ptr, public_key, 33) == 1
@@ -90,6 +86,36 @@ module Secp256k1
           end
           secp256k1_musig_partial_sig_verify(context, sig_ptr, nonce_ptr, pubkey_ptr, key_agg_ctx.pointer, session) == 1
         end
+      end
+
+      # Aggregates partial signatures
+      # @param [Array] partial_sigs Array of partial signatures.
+      # @return [String] An aggregated signature.
+      # @raise [ArgumentError] If invalid arguments specified.
+      # @raise [Secp256k1::Error]
+      def aggregate_partial_sigs(partial_sigs)
+        raise ArgumentError, "partial_sigs must be Array." unless partial_sigs.is_a?(Array)
+        raise ArgumentError, "partial_sigs must not be empty." if partial_sigs.empty?
+        with_context do |context|
+          sigs_ptr = FFI::MemoryPointer.new(:pointer, partial_sigs.length)
+          sigs_ptr.write_array_of_pointer(partial_sigs.map{|partial_sig| parse_partial_sig(context, partial_sig)})
+          sig64 = FFI::MemoryPointer.new(:uchar, 64)
+          if secp256k1_musig_partial_sig_agg(context, sig64, session, sigs_ptr, partial_sigs.length) == 0
+            raise Error, "secp256k1_musig_partial_sig_agg arguments invalid."
+          end
+          sig64.read_string(64).unpack1('H*')
+        end
+      end
+
+      private
+
+      def parse_partial_sig(context, partial_sig)
+        partial_sig = FFI::MemoryPointer.new(:uchar, 32).put_bytes(0, hex2bin(partial_sig))
+        sig_ptr = FFI::MemoryPointer.new(:uchar, 36)
+        if secp256k1_musig_partial_sig_parse(context, sig_ptr, partial_sig) == 0
+          raise Error, "secp256k1_musig_partial_sig_parse failed."
+        end
+        sig_ptr
       end
     end
   end
