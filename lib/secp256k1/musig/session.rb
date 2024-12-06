@@ -37,6 +37,7 @@ module Secp256k1
       end
 
       # Produces a partial signature for a given key pair and secret nonce.
+      # @param [String] sec_nonce The secret nonce to sign the message.
       # @param [String] private_key The private key to sign the message.
       # @return [String] A partial signature.
       # @raise [ArgumentError] If invalid arguments specified.

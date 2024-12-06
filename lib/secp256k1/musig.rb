@@ -2,6 +2,60 @@ require_relative 'musig/key_agg'
 require_relative 'musig/session'
 
 module Secp256k1
+
+  # MuSig module
+  # @example
+  #   include Secp256k1
+  #
+  #   # Two signer.
+  #   sk1, pk1 = generate_key_pair
+  #   sk2, pk2 = generate_key_pair
+  #
+  #   # Aggregate public key
+  #   key_agg_ctx = aggregate_pubkey([pk1, pk2])
+  #   agg_pubkey = key_agg_ctx.aggregate_public_key
+  #
+  #   # If you need tweak
+  #   key_agg_ctx.tweak_add('7468697320636f756c64206265206120424950333220747765616b2e2e2e2e00')
+  #   # If you need tweak with xonly
+  #   key_agg_ctx.tweak_add('7468697320636f756c64206265206120546170726f6f7420747765616b2e2e00', xonly: true)
+  #
+  #   agg_pubkey = key_agg_ctx.aggregate_public_key
+  #
+  #   msg = Digest::SHA256.digest('message')
+  #
+  #   # Nonce generation
+  #   session_id1 = generate_musig_session_id
+  #   secnonce1, pubnonce1 = target.generate_musig_nonce(
+  #     session_id1,
+  #     pk1,
+  #     sk: sk1,
+  #     key_agg_ctx: key_agg_ctx,
+  #     msg: msg
+  #   )
+  #
+  #   session_id2 = generate_musig_session_id
+  #   secnonce2, pubnonce2 = target.generate_musig_nonce(
+  #     session_id2,
+  #     pk2,
+  #     sk: sk2,
+  #     key_agg_ctx: key_agg_ctx,
+  #     msg: msg
+  #   )
+  #
+  #   # Aggregate public nonces
+  #   agg_nonce = aggregate_musig_nonce([pubnonce1, pubnonce2])
+  #
+  #   # Generate partial sig
+  #   musig_session = Secp256k1::MuSig::Session.new(key_agg_ctx, agg_nonce, msg)
+  #   partial_sig1 = musig_session.partial_sign(secnonce1, sk1)
+  #   partial_sig2 = musig_session.partial_sign(secnonce2, sk2)
+  #
+  #   # Aggregate signature
+  #   agg_sig = musig_session.aggregate_partial_sigs([partial_sig1, partial_sig2])
+  #
+  #   # Verify schnorr signature
+  #   verify_schnorr(msg, agg_sig, agg_pubkey)
   module MuSig
 
     # Aggregate public keys.
