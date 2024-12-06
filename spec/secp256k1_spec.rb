@@ -47,13 +47,13 @@ RSpec.describe Secp256k1 do
     it { is_expected.to eq '020025aeb645b64b632c91d135683e227cb508ebb1766c65ee40405f53b8f1bb3a' }
   end
 
-  describe '#sign_data/#verify_data' do
+  describe '#sign/#verify' do
     context 'ecdsa' do
       it 'should be signed' do
         message = Digest::SHA256.digest('message')
         priv_key = '3b7845c14659d875b2e50093f07f950c96271f6cc71a3531750c5a567084d438'
         pub_key = '0292ee82d9add0512294723f2c363aee24efdeb3f258cdaf5118a4fcf5263e92c9'
-        sig = target.sign_data(message, priv_key, nil)
+        sig = target.sign_ecdsa(message, priv_key, nil)
         expect(target.verify_ecdsa(message, sig, pub_key)).to be true
         expect{target.verify_ecdsa('hoge', sig, pub_key)}.to raise_error(ArgumentError, 'data must be 32 bytes.')
       end
@@ -64,7 +64,7 @@ RSpec.describe Secp256k1 do
         message = Digest::SHA256.digest('message')
         priv_key = '3b7845c14659d875b2e50093f07f950c96271f6cc71a3531750c5a567084d438'
         pub_key = target.generate_pubkey(priv_key)
-        sig = target.sign_data(message, priv_key, algo: :schnorr)
+        sig = target.sign_schnorr(message, priv_key)
         expect(target.verify_schnorr(message, sig, pub_key[2..-1])).to be true
         expect{target.verify_schnorr('hoge', sig, pub_key[2..-1])}.to raise_error(ArgumentError, 'data must be 32 bytes.')
 
@@ -72,7 +72,7 @@ RSpec.describe Secp256k1 do
         message = ['7E2D58D8B3BCDF1ABADEC7829054F90DDA9805AAB56C77333024B9D0A508B75C'].pack('H*')
         priv_key = 'C90FDAA22168C234C4C6628B80DC1CD129024E088A67CC74020BBEA63B14E5C9'
         aux_rand = ['C87AA53824B4D7AE2EB035A2B5BBBCCC080E76CDC6D1692C4B0B62D798E6D906'].pack('H*')
-        sig = target.sign_data(message, priv_key, aux_rand, algo: :schnorr).unpack1('H*')
+        sig = target.sign_schnorr(message, priv_key, aux_rand).unpack1('H*')
         expect(sig).to eq('5831aaeed7b44bb74e5eab94ba9d4294c49bcf2a60728d8b4c200f50dd313c1bab745879a5ad954a72c45a91c3a51d3c7adea98d82f8481e0e1e03674a6f3fb7')
       end
     end

@@ -88,25 +88,6 @@ module Secp256k1
     end
   end
 
-  # Sign to data.
-  # @param [String] data The 32-byte message hash being signed with binary format.
-  # @param [String] private_key a private key with hex format using sign.
-  # @param [String] extra_entropy a extra entropy with binary format for rfc6979.
-  # @param [Symbol] algo signature algorithm. ecdsa(default) or schnorr.
-  # @return [String] signature data with binary format. If unsupported algorithm specified, return nil.
-  # @raise [ArgumentError] If invalid arguments specified.
-  def sign_data(data, private_key, extra_entropy = nil, algo: :ecdsa)
-    case algo
-    when :ecdsa
-      sign_ecdsa(data, private_key, extra_entropy)
-    when :schnorr
-      sign_schnorr(data, private_key, extra_entropy)
-    else
-      raise ArgumentError, "unknown algo: #{algo}"
-    end
-  end
-
-
   # Validate whether this is a valid public key.
   # @param [String] pubkey public key with hex format.
   # @param [Boolean] allow_hybrid whether support hybrid public key.
