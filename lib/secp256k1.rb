@@ -142,7 +142,7 @@ module Secp256k1
   # @param [String] extra_entropy An extra entropy with binary format for rfc6979.
   # @return [String] signature data with binary format. If unsupported algorithm specified, return nil.
   # @raise [ArgumentError] If invalid arguments specified.
-  def sign_ecdsa(data, private_key, extra_entropy)
+  def sign_ecdsa(data, private_key, extra_entropy = nil)
     validate_string!("private_key", private_key, 32)
     validate_string!("data", data, 32)
     validate_string!("extra_entropy", extra_entropy, 32) if extra_entropy
