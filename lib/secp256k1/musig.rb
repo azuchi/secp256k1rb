@@ -132,6 +132,44 @@ module Secp256k1
       end
     end
 
+    # Generate a nonce pair deterministically using a non-repeating counter instead of session randomness.
+    # The caller must ensure that +counter+ never repeats for the same key pair.
+    # @param [Integer] counter A non-repeating counter(uint64).
+    # @param [String] private_key The private key for which the partial signature is generated, with hex format.
+    # @param [Secp256k1::MuSig::KeyAggContext] key_agg_ctx (Optional) The aggregated public key context.
+    # @param [String] msg (Optional) The message to be signed.
+    # @param [String] extra_in (Optional) The auxiliary input.
+    # @return [Array(String)] The array of secret nonce and public nonce with hex format.
+    # @raise [ArgumentError] If invalid arguments specified.
+    # @raise [Secp256k1::Error]
+    def generate_musig_nonce_counter(counter, private_key, key_agg_ctx: nil, msg: nil, extra_in: nil)
+      raise ArgumentError, "counter must be Integer." unless counter.is_a?(Integer)
+      raise ArgumentError, "counter must be between 0 and 2**64-1." if counter < 0 || counter > (2**64 - 1)
+      validate_string!("private_key", private_key, 32)
+      validate_string!("msg", msg, 32) if msg
+      validate_string!("extra_in", extra_in, 32) if extra_in
+      if key_agg_ctx
+        raise ArgumentError, "key_agg_ctx must be Secp256k1::MuSig::KeyAggContext." unless key_agg_ctx.is_a?(KeyAggContext)
+      end
+
+      with_context do |context|
+        keypair = [create_keypair(private_key)].pack('H*')
+        keypair_ptr = FFI::MemoryPointer.new(:uchar, 96).put_bytes(0, keypair)
+        pubnonce = FFI::MemoryPointer.new(:uchar, 132)
+        secnonce = FFI::MemoryPointer.new(:uchar, 132)
+        msg32 = msg ? FFI::MemoryPointer.new(:uchar, 32).put_bytes(0, hex2bin(msg)) : nil
+        extra_input32 = extra_in ? FFI::MemoryPointer.new(:uchar, 32).put_bytes(0, hex2bin(extra_in)) : nil
+        cache_ptr = key_agg_ctx ? key_agg_ctx.pointer : nil
+
+        raise Error, "arguments is invalid." unless secp256k1_musig_nonce_gen_counter(
+          context, secnonce, pubnonce, counter, keypair_ptr, msg32, cache_ptr, extra_input32) == 1
+
+        pub66 = FFI::MemoryPointer.new(:uchar, 66)
+        secp256k1_musig_pubnonce_serialize(context, pub66, pubnonce)
+        [secnonce.read_string(132).unpack1('H*'), pub66.read_string(66).unpack1('H*')]
+      end
+    end
+
     # Aggregates the nonces of all signers into a single nonce.
     # @param [Array] pub_nonces An array of public nonces sent by the signers.
     # @return [String] An aggregated public nonce.

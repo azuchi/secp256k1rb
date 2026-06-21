@@ -157,4 +157,31 @@ RSpec.describe Secp256k1::MuSig do
       expect(target.verify_schnorr(msg, agg_sig, sorted_keys[0][1][2..-1])).to be false
     end
   end
+
+  describe '#generate_musig_nonce_counter' do
+    it 'produces nonces usable for a full signing session' do
+      sk1, pk1 = target.generate_key_pair
+      sk2, pk2 = target.generate_key_pair
+      key_agg_ctx = target.aggregate_pubkey([pk1, pk2])
+      agg_pubkey = key_agg_ctx.aggregate_public_key
+      msg = Digest::SHA256.digest('message')
+
+      secnonce1, pubnonce1 = target.generate_musig_nonce_counter(0, sk1, key_agg_ctx: key_agg_ctx, msg: msg)
+      secnonce2, pubnonce2 = target.generate_musig_nonce_counter(1, sk2, key_agg_ctx: key_agg_ctx, msg: msg)
+      expect([pubnonce1].pack('H*').bytesize).to eq(66)
+
+      agg_nonce = target.aggregate_musig_nonce([pubnonce1, pubnonce2])
+      session = Secp256k1::MuSig::Session.new(key_agg_ctx, agg_nonce, msg)
+      partial_sig1 = session.partial_sign(secnonce1, sk1)
+      partial_sig2 = session.partial_sign(secnonce2, sk2)
+      agg_sig = session.aggregate_partial_sigs([partial_sig1, partial_sig2])
+      expect(target.verify_schnorr(msg, agg_sig, agg_pubkey)).to be true
+    end
+
+    it 'raises ArgumentError for invalid arguments' do
+      sk, _ = target.generate_key_pair
+      expect { target.generate_musig_nonce_counter(-1, sk) }.to raise_error(ArgumentError)
+      expect { target.generate_musig_nonce_counter('0', sk) }.to raise_error(ArgumentError)
+    end
+  end
 end

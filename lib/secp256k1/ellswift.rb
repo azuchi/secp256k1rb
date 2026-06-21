@@ -19,6 +19,26 @@ module Secp256k1
       end
     end
 
+    # Encode a public key into an ElligatorSwift public key.
+    # @param [String] pubkey public key with hex format.
+    # @param [String] rnd (Optional)32-byte randomness with binary format. If omitted, random bytes are used.
+    # @return [String] ElligatorSwift public key with hex format(64 bytes).
+    # @raise [Secp256k1::Error] If encoding failed.
+    # @raise [ArgumentError] If invalid arguments specified.
+    def ellswift_encode(pubkey, rnd = nil)
+      raise ArgumentError, "pubkey must be String." unless pubkey.is_a?(String)
+      validate_string!("rnd", rnd, 32) if rnd
+      pubkey = hex2bin(pubkey)
+      rnd = rnd ? hex2bin(rnd) : SecureRandom.random_bytes(32)
+      with_context do |context|
+        internal = parse_pubkey_internal(context, pubkey)
+        ell64 = FFI::MemoryPointer.new(:uchar, 64)
+        rnd32 = FFI::MemoryPointer.new(:uchar, 32).put_bytes(0, rnd)
+        raise Error, 'Failed to encode ElligatorSwift public key.' unless secp256k1_ellswift_encode(context, ell64, internal, rnd32) == 1
+        ell64.read_string(64).unpack1('H*')
+      end
+    end
+
     # Compute an ElligatorSwift public key for a secret key.
     # @param [String] private_key private key with hex format
     # @return [String] ElligatorSwift public key with hex format.

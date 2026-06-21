@@ -17,4 +17,19 @@ RSpec.describe Secp256k1::Recover do
       end
     end
   end
+
+  describe '#recoverable_signature_to_ecdsa' do
+    it 'converts a recoverable signature into a verifiable ECDSA signature' do
+      private_key, public_key = target.generate_key_pair
+      digest = SecureRandom.random_bytes(32)
+      sig, rec = target.sign_recoverable(digest, private_key)
+      full_sig = [rec + 0x1b + 4].pack('C') + [sig].pack('H*')
+      der = target.recoverable_signature_to_ecdsa(full_sig)
+      expect(target.verify_ecdsa(digest, der, public_key)).to be true
+    end
+
+    it 'raises ArgumentError for invalid arguments' do
+      expect { target.recoverable_signature_to_ecdsa('aa') }.to raise_error(ArgumentError)
+    end
+  end
 end

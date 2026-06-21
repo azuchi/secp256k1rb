@@ -40,6 +40,8 @@ generate_key_pair
 See [here](https://www.rubydoc.info/gems/secp256k1rb/Secp256k1) for available methods.
 In addition, the following modules are also included, so you can use them as they are.
 
+* [Key](https://www.rubydoc.info/gems/secp256k1rb/Secp256k1/Key)
+* [ECDH](https://www.rubydoc.info/gems/secp256k1rb/Secp256k1/ECDH)
 * [Recover](https://www.rubydoc.info/gems/secp256k1rb/Secp256k1/Recover)
 * [SchnorrSig](https://www.rubydoc.info/gems/secp256k1rb/Secp256k1/SchnorrSig)
 * [MuSig](https://www.rubydoc.info/gems/secp256k1rb/Secp256k1/MuSig)
@@ -51,3 +53,4 @@ secp256k1 version | secp256k1rb version
 :---:|:---:
 v0.4.0 | v0.1.x
 v0.6.0 | v0.2.x
+v0.7.1 | v0.3.x

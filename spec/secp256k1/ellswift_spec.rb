@@ -37,4 +37,25 @@ RSpec.describe Secp256k1::EllSwift do
       end
     end
   end
+
+  describe '#ellswift_encode' do
+    it 'encodes a public key that decodes back to the original' do
+      _, pubkey = target.generate_key_pair
+      ell = target.ellswift_encode(pubkey)
+      expect([ell].pack('H*').bytesize).to eq(Secp256k1::ELL_SWIFT_KEY_SIZE)
+      expect(target.ellswift_decode(ell)).to eq(pubkey)
+    end
+
+    it 'is deterministic for the same randomness' do
+      _, pubkey = target.generate_key_pair
+      rnd = SecureRandom.bytes(32)
+      expect(target.ellswift_encode(pubkey, rnd)).to eq(target.ellswift_encode(pubkey, rnd))
+    end
+
+    it 'raises ArgumentError for invalid arguments' do
+      _, pubkey = target.generate_key_pair
+      expect { target.ellswift_encode(123) }.to raise_error(ArgumentError)
+      expect { target.ellswift_encode(pubkey, 'aa') }.to raise_error(ArgumentError)
+    end
+  end
 end

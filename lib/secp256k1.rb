@@ -3,6 +3,8 @@
 require 'securerandom'
 require_relative "secp256k1/version"
 require_relative 'secp256k1/c'
+require_relative 'secp256k1/key'
+require_relative 'secp256k1/ecdh'
 require_relative 'secp256k1/recovery'
 require_relative 'secp256k1/ellswift'
 require_relative 'secp256k1/schnorrsig'
@@ -28,6 +30,8 @@ module Secp256k1
   class Error < StandardError; end
 
   include C
+  include Key
+  include ECDH
   include Recover
   include SchnorrSig
   include EllSwift
@@ -223,6 +227,64 @@ module Secp256k1
     end
   end
 
+  # Convert a DER-encoded ECDSA signature into compact(64 bytes) format.
+  # @param [String] signature DER-encoded signature with binary format.
+  # @return [String] compact signature(64 bytes) with binary format.
+  # @raise [Secp256k1::Error] If the signature could not be parsed.
+  # @raise [ArgumentError] If invalid arguments specified.
+  def ecdsa_signature_to_compact(signature)
+    raise ArgumentError, "signature must be String." unless signature.is_a?(String)
+    signature = hex2bin(signature)
+    with_context do |context|
+      sig_ptr = FFI::MemoryPointer.new(:uchar, signature.bytesize).put_bytes(0, signature)
+      internal_signature = FFI::MemoryPointer.new(:uchar, 64)
+      raise Error, 'secp256k1_ecdsa_signature_parse_der failed.' unless secp256k1_ecdsa_signature_parse_der(context, internal_signature, sig_ptr, signature.bytesize) == 1
+      output = FFI::MemoryPointer.new(:uchar, 64)
+      secp256k1_ecdsa_signature_serialize_compact(context, output, internal_signature)
+      output.read_string(64)
+    end
+  end
+
+  # Convert a compact(64 bytes) ECDSA signature into DER-encoded format.
+  # @param [String] signature compact signature(64 bytes) with binary format.
+  # @return [String] DER-encoded signature with binary format.
+  # @raise [Secp256k1::Error] If the signature could not be parsed.
+  # @raise [ArgumentError] If invalid arguments specified.
+  def ecdsa_signature_from_compact(signature)
+    validate_string!("signature", signature, 64)
+    signature = hex2bin(signature)
+    with_context do |context|
+      sig_ptr = FFI::MemoryPointer.new(:uchar, 64).put_bytes(0, signature)
+      internal_signature = FFI::MemoryPointer.new(:uchar, 64)
+      raise Error, 'secp256k1_ecdsa_signature_parse_compact failed.' unless secp256k1_ecdsa_signature_parse_compact(context, internal_signature, sig_ptr) == 1
+      output = FFI::MemoryPointer.new(:uchar, 72)
+      output_len = FFI::MemoryPointer.new(:uint64).put_uint64(0, 72)
+      raise Error, 'secp256k1_ecdsa_signature_serialize_der failed.' unless secp256k1_ecdsa_signature_serialize_der(context, output, output_len, internal_signature) == 1
+      output.read_string(output_len.read_uint64)
+    end
+  end
+
+  # Compute a tagged hash as defined in BIP-340: SHA256(SHA256(tag) || SHA256(tag) || msg).
+  # @param [String] tag the tag with binary format.
+  # @param [String] msg the message with binary format.
+  # @return [String] 32-byte tagged hash with hex format.
+  # @raise [Secp256k1::Error] If the hash could not be computed.
+  # @raise [ArgumentError] If invalid arguments specified.
+  def tagged_sha256(tag, msg)
+    raise ArgumentError, "tag must be String." unless tag.is_a?(String)
+    raise ArgumentError, "msg must be String." unless msg.is_a?(String)
+    tag = hex2bin(tag)
+    msg = hex2bin(msg)
+    with_context do |context|
+      hash32 = FFI::MemoryPointer.new(:uchar, 32)
+      # The library requires non-NULL pointers even for zero-length input, so allocate at least 1 byte.
+      tag_ptr = FFI::MemoryPointer.new(:uchar, [tag.bytesize, 1].max).put_bytes(0, tag)
+      msg_ptr = FFI::MemoryPointer.new(:uchar, [msg.bytesize, 1].max).put_bytes(0, msg)
+      raise Error, 'secp256k1_tagged_sha256 failed.' unless secp256k1_tagged_sha256(context, hash32, tag_ptr, tag.bytesize, msg_ptr, msg.bytesize) == 1
+      hash32.read_string(32).unpack1('H*')
+    end
+  end
+
   private
 
   # Calculate full public key(64 bytes) from public key(32 bytes).
@@ -237,6 +299,28 @@ module Secp256k1
       raise ArgumentError, 'An invalid public key was specified.' unless secp256k1_xonly_pubkey_parse(context, full_pubkey, xonly_pubkey) == 1
       full_pubkey.read_string(64).unpack1('H*')
     end
+  end
+
+  # Parse a serialized public key into an internal 64-byte pubkey pointer.
+  # @param [FFI::Pointer] context secp256k1 context.
+  # @param [String] pubkey serialized public key with binary format.
+  # @return [FFI::Pointer] internal pubkey pointer(64 bytes).
+  # @raise [Secp256k1::Error] If the public key is invalid.
+  def parse_pubkey_internal(context, pubkey)
+    pubkey_ptr = FFI::MemoryPointer.new(:uchar, pubkey.bytesize).put_bytes(0, pubkey)
+    internal_pubkey = FFI::MemoryPointer.new(:uchar, 64)
+    raise Error, 'An invalid public key was specified.' unless secp256k1_ec_pubkey_parse(context, internal_pubkey, pubkey_ptr, pubkey.bytesize) == 1
+    internal_pubkey
+  end
+
+  # Serialize an internal x-only public key pointer(64 bytes) to 32-byte hex.
+  # @param [FFI::Pointer] context secp256k1 context.
+  # @param [FFI::Pointer] xonly_input internal x-only pubkey pointer(64 bytes).
+  # @return [String] x-only public key with hex format(32 bytes).
+  def serialize_xonly_pubkey_internal(context, xonly_input)
+    output = FFI::MemoryPointer.new(:uchar, X_ONLY_PUBKEY_SIZE)
+    secp256k1_xonly_pubkey_serialize(context, output, xonly_input)
+    output.read_string(X_ONLY_PUBKEY_SIZE).unpack1('H*')
   end
 
   def generate_pubkey_in_context(context, private_key, compressed: true)

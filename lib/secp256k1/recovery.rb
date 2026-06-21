@@ -68,5 +68,28 @@ module Secp256k1
         serialize_pubkey_internal(context, pubkey.read_string(64), compressed)
       end
     end
+
+    # Convert a recoverable signature into a normal DER-encoded ECDSA signature.
+    # @param [String] signature The recoverable signature with binary format(65 bytes), as accepted by {#recover}.
+    # @return [String] DER-encoded signature with binary format.
+    # @raise [Secp256k1::Error] If conversion failed.
+    # @raise [ArgumentError] If invalid arguments specified.
+    def recoverable_signature_to_ecdsa(signature)
+      validate_string!("signature", signature, 65)
+      signature = hex2bin(signature)
+      rec = (signature[0].ord - 0x1b) & 3
+      raise ArgumentError, "rec must be between 0 and 3." if rec < 0 || rec > 3
+      with_context do |context|
+        recoverable = FFI::MemoryPointer.new(:uchar, 65)
+        input = FFI::MemoryPointer.new(:uchar, 64).put_bytes(0, signature[1..-1])
+        raise Error, 'secp256k1_ecdsa_recoverable_signature_parse_compact failed.' unless secp256k1_ecdsa_recoverable_signature_parse_compact(context, recoverable, input, rec) == 1
+        internal_signature = FFI::MemoryPointer.new(:uchar, 64)
+        raise Error, 'secp256k1_ecdsa_recoverable_signature_convert failed.' unless secp256k1_ecdsa_recoverable_signature_convert(context, internal_signature, recoverable) == 1
+        output = FFI::MemoryPointer.new(:uchar, 72)
+        output_len = FFI::MemoryPointer.new(:uint64).put_uint64(0, 72)
+        raise Error, 'secp256k1_ecdsa_signature_serialize_der failed.' unless secp256k1_ecdsa_signature_serialize_der(context, output, output_len, internal_signature) == 1
+        output.read_string(output_len.read_uint64)
+      end
+    end
   end
 end

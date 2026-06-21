@@ -93,4 +93,60 @@ RSpec.describe Secp256k1 do
     end
   end
 
+  describe '#ecdsa_signature_to_compact/#ecdsa_signature_from_compact' do
+    it 'round-trips between DER and compact signatures' do
+      sk, pk = target.generate_key_pair
+      msg = Digest::SHA256.digest('message')
+      der = target.sign_ecdsa(msg, sk)
+      compact = target.ecdsa_signature_to_compact(der)
+      expect(compact.bytesize).to eq(64)
+      der2 = target.ecdsa_signature_from_compact(compact)
+      expect(target.verify_ecdsa(msg, der2, pk)).to be true
+    end
+
+    it 'raises ArgumentError for invalid arguments' do
+      expect { target.ecdsa_signature_to_compact(123) }.to raise_error(ArgumentError)
+      expect { target.ecdsa_signature_from_compact('aa') }.to raise_error(ArgumentError)
+    end
+  end
+
+  describe '#tagged_sha256' do
+    it 'matches the BIP-340 tagged hash definition' do
+      tag = 'BIP0340/challenge'
+      msg = SecureRandom.bytes(37)
+      tag_hash = Digest::SHA256.digest(tag)
+      expected = Digest::SHA256.hexdigest(tag_hash + tag_hash + msg)
+      expect(target.tagged_sha256(tag, msg)).to eq(expected)
+    end
+
+    it 'handles empty messages' do
+      tag = 'tag'
+      tag_hash = Digest::SHA256.digest(tag)
+      expect(target.tagged_sha256(tag, '')).to eq(Digest::SHA256.hexdigest(tag_hash + tag_hash))
+    end
+
+    it 'raises ArgumentError for invalid arguments' do
+      expect { target.tagged_sha256(123, 'msg') }.to raise_error(ArgumentError)
+    end
+  end
+
+  describe '#sign_schnorr_custom' do
+    it 'matches sign_schnorr for 32-byte messages' do
+      sk, _ = target.generate_key_pair
+      msg = Digest::SHA256.digest('message')
+      aux = SecureRandom.bytes(32)
+      expect(target.sign_schnorr_custom(msg, sk, aux)).to eq(target.sign_schnorr(msg, sk, aux))
+    end
+
+    it 'signs and verifies variable-length messages' do
+      sk, pk = target.generate_key_pair
+      xonly, = target.xonly_pubkey_from_pubkey(pk)
+      msg = 'a' * 100
+      sig = target.sign_schnorr_custom(msg, sk)
+      expect(sig.bytesize).to eq(64)
+      expect(target.verify_schnorr_custom(msg, sig, xonly)).to be true
+      expect(target.verify_schnorr_custom('b' * 100, sig, xonly)).to be false
+    end
+  end
+
 end
